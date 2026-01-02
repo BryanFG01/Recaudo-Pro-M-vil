@@ -1,0 +1,5 @@
+package com.example.recaudo_pro
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

@@ -1,0 +1,74 @@
+name: RecaudoPro
+description: Aplicación de gestión de recaudo con Clean Architecture y Riverpod
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Supabase
+  supabase_flutter: ^2.5.6
+
+  # Dependency Injection
+  get_it: ^7.7.0
+
+  # Navigation
+  go_router: ^13.0.0
+
+  # UI
+  cupertino_icons: ^1.0.6
+  google_fonts: ^6.1.0
+  flutter_svg: ^2.0.9
+  intl: ^0.19.0
+
+  # Utils
+  equatable: ^2.0.5
+  freezed_annotation: ^2.4.1
+  json_annotation: ^4.8.1
+  shared_preferences: ^2.2.2
+  uuid: ^4.3.3
+  url_launcher: ^6.2.5
+  geolocator: ^13.0.1
+  
+  # Printing
+  printing: ^5.12.0
+  pdf: ^3.10.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  build_runner: ^2.4.8
+  freezed: ^2.4.7
+  json_serializable: ^6.7.1
+  riverpod_generator: ^2.3.9
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "lib/assets/icons/logo.nuevo.png"
+  min_sdk_android: 21 # android min sdk min:16, default 21
+  web:
+    generate: true
+    image_path: "lib/assets/icons/logo.nuevo.png"
+    background_color: "#hex_code"
+    theme_color: "#hex_code"
+  windows:
+    generate: true
+    image_path: "lib/assets/icons/logo.nuevo.png"
+    icon_size: 48 # min:48, max:256, default: 48
+  macos:
+    generate: true
+    image_path: "lib/assets/icons/logo.nuevo.png"
+
+flutter:
+  uses-material-design: true
