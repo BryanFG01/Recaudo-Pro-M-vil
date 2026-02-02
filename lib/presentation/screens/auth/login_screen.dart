@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
@@ -18,16 +19,61 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _numberController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _rememberCredentials = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _numberController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  // Cargar credenciales guardadas
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedNumber = prefs.getString('saved_number');
+      final savedPassword = prefs.getString('saved_password');
+      final rememberMe = prefs.getBool('remember_credentials') ?? false;
+
+      if (rememberMe && savedNumber != null && savedPassword != null) {
+        setState(() {
+          _numberController.text = savedNumber;
+          _passwordController.text = savedPassword;
+          _rememberCredentials = true;
+        });
+      }
+    } catch (e) {
+      // Si hay error al cargar, continuar sin credenciales guardadas
+    }
+  }
+
+  // Guardar credenciales
+  Future<void> _saveCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (_rememberCredentials) {
+        await prefs.setString('saved_number', _numberController.text.trim());
+        await prefs.setString('saved_password', _passwordController.text);
+        await prefs.setBool('remember_credentials', true);
+      } else {
+        await prefs.remove('saved_number');
+        await prefs.remove('saved_password');
+        await prefs.setBool('remember_credentials', false);
+      }
+    } catch (e) {
+      // Si hay error al guardar, continuar sin guardar
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -49,20 +95,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final useCase = ref.read(signInWithEmailUseCaseProvider);
+      final useCase = ref.read(signInWithNumberUseCaseProvider);
       final user = await useCase(
-        selectedBusiness.id, // businessId
-        _emailController.text.trim(),
+        selectedBusiness.id,
+        _numberController.text.trim(),
         _passwordController.text,
       );
 
       if (user != null && mounted) {
+        // Validar is_active: si la API devuelve is_active: false, no permitir login
+        if (!user.isActive) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.userInactiveMessage),
+              backgroundColor: AppColors.error,
+              duration: Duration(seconds: 5),
+            ),
+          );
+          return;
+        }
+        // Guardar credenciales si el usuario marcó la opción
+        await _saveCredentials();
         ref.read(currentUserProvider.notifier).setUser(user);
         context.go('/dashboard');
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Credenciales inválidas o usuario no pertenece a este negocio'),
+            content: Text(
+                'Credenciales inválidas o usuario no pertenece a este negocio'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -86,7 +146,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final selectedBusiness = ref.watch(selectedBusinessProvider);
-    
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -155,20 +215,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 32),
-                // Email Field
+                const SizedBox(height: 30),
+                // Número de usuario (acepta números y letras)
                 CustomTextField(
-                  label: AppStrings.email,
-                  hint: AppStrings.enterEmail,
-                  prefixIcon: Icons.email_outlined,
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
+                  label: AppStrings.userNumber,
+                  hint: AppStrings.enterUserNumber,
+                  prefixIcon: Icons.badge_outlined,
+                  controller: _numberController,
+                  keyboardType: TextInputType.text,
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Por favor ingresa tu correo';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Correo inválido';
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Por favor ingresa tu número de usuario';
                     }
                     return null;
                   },
@@ -200,19 +257,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                // Forgot Password
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () {
-                      // TODO: Implementar recuperación de contraseña
-                    },
-                    child: const Text(
-                      AppStrings.forgotPassword,
-                      style: TextStyle(color: AppColors.primary),
+                // Remember Credentials Checkbox
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _rememberCredentials,
+                      onChanged: (value) {
+                        setState(() {
+                          _rememberCredentials = value ?? false;
+                        });
+                      },
+                      activeColor: AppColors.primary,
+                      checkColor: Colors.white,
                     ),
-                  ),
+                    const Text(
+                      'Recordar número y contraseña',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
+                // Forgot Password
+                // Align(
+                //   alignment: Alignment.centerRight,
+                //   child: TextButton(
+                //     onPressed: () {
+                //       // TODO: Implementar recuperación de contraseña
+                //     },
+                //     child: const Text(
+                //       AppStrings.forgotPassword,
+                //       style: TextStyle(color: AppColors.primary),
+                //     ),
+                //   ),
+                // ),
                 const SizedBox(height: 24),
                 // Login Button
                 CustomButton(

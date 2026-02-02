@@ -8,6 +8,7 @@ import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/credit_provider.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
 
 class ClientsListScreen extends ConsumerStatefulWidget {
   const ClientsListScreen({super.key});
@@ -326,6 +327,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
           ],
         ),
       ),
+      bottomNavigationBar: const AppBottomNavigationBar(currentIndex: 0),
     );
   }
 

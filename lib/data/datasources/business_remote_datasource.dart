@@ -1,4 +1,8 @@
-import '../../core/config/supabase_config.dart';
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
+
+import '../../core/config/api_config.dart';
 import '../../domain/entities/business_entity.dart';
 import '../models/business_model.dart';
 
@@ -12,71 +16,54 @@ abstract class BusinessRemoteDataSource {
 class BusinessRemoteDataSourceImpl implements BusinessRemoteDataSource {
   @override
   Future<List<BusinessEntity>> getBusinesses() async {
-    try {
-      final response = await SupabaseConfig.client
-          .from('businesses')
-          .select()
-          .eq('is_active', true)
-          .order('name', ascending: true);
-
-      return (response as List)
-          .map((json) => BusinessModel.fromJson(json as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      throw Exception('Error al obtener negocios: $e');
+    final url = ApiConfig.buildApiUrl('/api/businesses');
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) {
+      throw Exception('Error al obtener negocios: ${response.statusCode}');
     }
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => BusinessModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
   @override
   Future<List<BusinessEntity>> searchBusinesses(String query) async {
-    try {
-      final response = await SupabaseConfig.client
-          .from('businesses')
-          .select()
-          .eq('is_active', true)
-          .or('name.ilike.%$query%,code.ilike.%$query%')
-          .order('name', ascending: true);
-
-      return (response as List)
-          .map((json) => BusinessModel.fromJson(json as Map<String, dynamic>))
-          .toList();
-    } catch (e) {
-      throw Exception('Error al buscar negocios: $e');
+    final url = ApiConfig.buildApiUrlWithQuery(
+        '/api/businesses', {'search': query});
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) {
+      throw Exception('Error al buscar negocios: ${response.statusCode}');
     }
+    final list = jsonDecode(response.body) as List<dynamic>;
+    return list
+        .map((e) => BusinessModel.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
   }
 
   @override
   Future<BusinessEntity?> getBusinessByCode(String code) async {
-    try {
-      final response = await SupabaseConfig.client
-          .from('businesses')
-          .select()
-          .eq('code', code)
-          .eq('is_active', true)
-          .maybeSingle();
-
-      if (response == null) return null;
-      return BusinessModel.fromJson(response as Map<String, dynamic>);
-    } catch (e) {
-      throw Exception('Error al obtener negocio: $e');
+    final url = ApiConfig.buildApiUrlWithQuery(
+        '/api/businesses', {'code': code});
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) return null;
+    final body = response.body;
+    if (body.isEmpty) return null;
+    final decoded = jsonDecode(body);
+    if (decoded is List) {
+      if (decoded.isEmpty) return null;
+      return BusinessModel.fromJson(
+          Map<String, dynamic>.from(decoded.first as Map));
     }
+    return BusinessModel.fromJson(Map<String, dynamic>.from(decoded as Map));
   }
 
   @override
   Future<BusinessEntity?> getBusinessById(String id) async {
-    try {
-      final response = await SupabaseConfig.client
-          .from('businesses')
-          .select()
-          .eq('id', id)
-          .eq('is_active', true)
-          .maybeSingle();
-
-      if (response == null) return null;
-      return BusinessModel.fromJson(response as Map<String, dynamic>);
-    } catch (e) {
-      throw Exception('Error al obtener negocio: $e');
-    }
+    final url = ApiConfig.buildApiUrl('/api/businesses/$id');
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) return null;
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return BusinessModel.fromJson(data);
   }
 }
-

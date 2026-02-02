@@ -8,7 +8,18 @@ class AuthRepositoryImpl implements AuthRepository {
   AuthRepositoryImpl(this.remoteDataSource);
 
   @override
-  Future<UserEntity?> signInWithEmail(String businessId, String email, String password) {
+  Future<UserEntity?> signInWithNumber(
+      String businessId, String number, String password) async {
+    final user = await remoteDataSource.signInWithNumber(
+        number.trim(), password);
+    if (user == null) return null;
+    if (user.businessId != businessId) return null;
+    return user;
+  }
+
+  @override
+  Future<UserEntity?> signInWithEmail(
+      String businessId, String email, String password) {
     return remoteDataSource.signInWithEmail(businessId, email, password);
   }
 

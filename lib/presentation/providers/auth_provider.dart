@@ -4,6 +4,7 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/user_entity.dart';
 import '../../domain/usecases/auth/get_current_user_usecase.dart';
 import '../../domain/usecases/auth/sign_in_with_email_usecase.dart';
+import '../../domain/usecases/auth/sign_in_with_number_usecase.dart';
 
 // Data Sources
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
@@ -18,6 +19,11 @@ final authRepositoryProvider = Provider<AuthRepositoryImpl>((ref) {
 // Use Cases
 final signInWithEmailUseCaseProvider = Provider<SignInWithEmailUseCase>((ref) {
   return SignInWithEmailUseCase(ref.watch(authRepositoryProvider));
+});
+
+final signInWithNumberUseCaseProvider =
+    Provider<SignInWithNumberUseCase>((ref) {
+  return SignInWithNumberUseCase(ref.watch(authRepositoryProvider));
 });
 
 final getCurrentUserUseCaseProvider = Provider<GetCurrentUserUseCase>((ref) {

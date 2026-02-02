@@ -141,6 +141,11 @@ class _BusinessSelectionScreenState
                     Expanded(
                       child: businessesAsync.when(
                         data: (businesses) {
+                          // Si no hay búsqueda, no mostrar negocios
+                          if (_searchQuery.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+
                           if (businesses.isEmpty) {
                             return const Center(
                               child: Text(
@@ -153,16 +158,15 @@ class _BusinessSelectionScreenState
                           }
 
                           // Filtrar negocios por búsqueda
-                          final filteredBusinesses = _searchQuery.isEmpty
-                              ? businesses
-                              : businesses.where((business) {
-                                  return business.name
-                                          .toLowerCase()
-                                          .contains(_searchQuery) ||
-                                      business.code
-                                          .toLowerCase()
-                                          .contains(_searchQuery);
-                                }).toList();
+                          final filteredBusinesses =
+                              businesses.where((business) {
+                            return business.name
+                                    .toLowerCase()
+                                    .contains(_searchQuery) ||
+                                business.code
+                                    .toLowerCase()
+                                    .contains(_searchQuery);
+                          }).toList();
 
                           if (filteredBusinesses.isEmpty) {
                             return const Center(

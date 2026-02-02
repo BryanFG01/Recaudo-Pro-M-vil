@@ -8,13 +8,15 @@ class CreditRepositoryImpl implements CreditRepository {
   CreditRepositoryImpl(this.remoteDataSource);
 
   @override
-  Future<List<CreditEntity>> getCredits() {
-    return remoteDataSource.getCredits();
+  Future<List<CreditEntity>> getCredits(String businessId) {
+    return remoteDataSource.getCreditsByBusiness(businessId);
   }
 
   @override
-  Future<List<CreditEntity>> getCreditsByClientId(String clientId) {
-    return remoteDataSource.getCreditsByClientId(clientId);
+  Future<List<CreditEntity>> getCreditsByClientId(
+      String businessId, String clientId) async {
+    final all = await remoteDataSource.getCreditsByBusiness(businessId);
+    return all.where((c) => c.clientId == clientId).toList();
   }
 
   @override
@@ -23,13 +25,25 @@ class CreditRepositoryImpl implements CreditRepository {
   }
 
   @override
-  Future<CreditEntity> createCredit(CreditEntity credit, {String? businessId}) {
-    return remoteDataSource.createCredit(credit, businessId: businessId);
+  Future<CreditEntity> createCredit(
+    CreditEntity credit, {
+    String? businessId,
+    String? businessCode,
+    String? userNumber,
+    String? documentId,
+  }) {
+    return remoteDataSource.createCredit(
+      credit,
+      businessId: businessId,
+      businessCode: businessCode,
+      userNumber: userNumber,
+      documentId: documentId,
+    );
   }
 
   @override
-  Future<CreditEntity> updateCredit(CreditEntity credit, {String? businessId}) {
+  Future<CreditEntity> updateCredit(
+      CreditEntity credit, {String? businessId}) {
     return remoteDataSource.updateCredit(credit, businessId: businessId);
   }
 }
-

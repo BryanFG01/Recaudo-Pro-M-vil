@@ -7,7 +7,7 @@ class BusinessHelper {
     return selectedBusiness?.id;
   }
 
-  static String? getCurrentBusinessIdOrThrow(WidgetRef ref) {
+  static String getCurrentBusinessIdOrThrow(WidgetRef ref) {
     final businessId = getCurrentBusinessId(ref);
     if (businessId == null) {
       throw Exception('No hay un negocio seleccionado');

@@ -5,17 +5,82 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/cash_session_provider.dart';
+import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
+import '../../providers/credit_provider.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../widgets/dashboard_card.dart';
 import '../../widgets/stat_card.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
+  Future<void> _showLogoutDialog(BuildContext context, WidgetRef ref) async {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: AppColors.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Cerrar Sesión',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            '¿Estás seguro de que deseas cerrar sesión?',
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 16,
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(); // Cerrar el diálogo
+              },
+              child: Text(
+                'Cancelar',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                ref.read(authRepositoryProvider).signOut().then((_) {
+                  ref.read(currentUserProvider.notifier).setUser(null);
+                  context.go('/login');
+                });
+              },
+              child: Text(
+                'Aceptar',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final statsAsync = ref.watch(dashboardStatsProvider(1));
+    // Period 0 = hoy: recaudo diario de la API (se reinicia cada 24h)
+    final statsAsync = ref.watch(dashboardStatsProvider(0));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -52,17 +117,35 @@ class DashboardScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined,
-                color: AppColors.textPrimary),
-            onPressed: () {},
+            icon: const Icon(Icons.sync, color: AppColors.textPrimary),
+            tooltip: 'Actualizar datos',
+            onPressed: () {
+              final user = ref.read(currentUserProvider);
+              ref.invalidate(clientsProvider);
+              ref.invalidate(creditsProvider);
+              ref.invalidate(dashboardStatsProvider(0));
+              ref.invalidate(dashboardStatsProvider(1));
+              ref.invalidate(dashboardStatsProvider(2));
+              ref.invalidate(recentCollectionsProvider);
+              if (user != null) {
+                ref.invalidate(withdrawalsByUserProvider(user.id));
+                ref.invalidate(cashSessionByUserProvider(user.id));
+              }
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Actualizando datos...'),
+                  duration: Duration(seconds: 2),
+                  backgroundColor: AppColors.primary,
+                ),
+              );
+            },
           ),
           IconButton(
             // icon de salir de la vista deslogarse
             icon:
                 const Icon(Icons.logout_outlined, color: AppColors.textPrimary),
             onPressed: () {
-              ref.read(currentUserProvider.notifier).setUser(null);
-              context.go('/login');
+              _showLogoutDialog(context, ref);
             },
           ),
         ],
@@ -72,12 +155,12 @@ class DashboardScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Daily Collection Card
+            // Recaudo diario desde API (GET /api/dashboard/stats) — se reinicia cada 24h
             statsAsync.when(
               data: (stats) => StatCard(
                 title: AppStrings.dailyCollection,
                 amount: stats.dailyCollection,
-                subtitle: AppStrings.todaySummary,
+                subtitle: 'Recaudo de hoy (se reinicia a las 00:00)',
               ),
               loading: () => const StatCard(
                 title: AppStrings.dailyCollection,
@@ -153,6 +236,14 @@ class DashboardScreen extends ConsumerWidget {
                     context.push('/my-wallet');
                   },
                 ),
+                DashboardCard(
+                  title: AppStrings.cashSessionAndWithdrawals,
+                  subtitle: AppStrings.cashSessionSubtitle,
+                  icon: Icons.point_of_sale_outlined,
+                  onTap: () {
+                    context.push('/cash-session/active');
+                  },
+                ),
                 // DashboardCard(
                 //   title: AppStrings.recharges,
                 //   subtitle: 'Recargas móviles',
@@ -177,44 +268,7 @@ class DashboardScreen extends ConsumerWidget {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textSecondary,
-        currentIndex: 0,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: AppStrings.home,
-          ),
-          // boton de agregar nuevo recaudo
-          BottomNavigationBarItem(
-            icon: Icon(Icons.add_outlined),
-            activeIcon: Icon(Icons.add),
-            label: AppStrings.newCollection,
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_outlined),
-            activeIcon: Icon(Icons.bar_chart),
-            label: AppStrings.reports,
-          ),
-          // BottomNavigationBarItem(
-          //   icon: Icon(Icons.help_outline),
-          //   activeIcon: Icon(Icons.help_outline),
-          //   label: AppStrings.help,
-          // ),
-        ],
-        onTap: (index) {
-          if (index == 1) {
-            context.push('/new-collection');
-          }
-          if (index == 2) {
-            context.push('/statistics');
-          }
-        },
-      ),
+      bottomNavigationBar: const AppBottomNavigationBar(currentIndex: 0),
     );
   }
 }

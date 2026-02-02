@@ -13,6 +13,13 @@ class CreditEntity extends Equatable {
   final DateTime? lastPaymentDate;
   final DateTime createdAt;
   final DateTime? nextDueDate;
+  /// Tasa de interés del préstamo (0–30 %).
+  final double? interestRate;
+  /// Monto total del interés (total_amount * interest_rate / 100).
+  final double? totalInterest;
+
+  /// Total a pagar (principal + interés). Para mostrar "total del crédito" en UI.
+  double get totalToPay => totalAmount + (totalInterest ?? 0);
 
   const CreditEntity({
     required this.id,
@@ -27,6 +34,8 @@ class CreditEntity extends Equatable {
     this.lastPaymentDate,
     required this.createdAt,
     this.nextDueDate,
+    this.interestRate,
+    this.totalInterest,
   });
 
   @override
@@ -43,6 +52,8 @@ class CreditEntity extends Equatable {
         lastPaymentDate,
         createdAt,
         nextDueDate,
+        interestRate,
+        totalInterest,
       ];
 }
 

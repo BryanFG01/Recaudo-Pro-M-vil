@@ -1,7 +1,9 @@
 import 'package:go_router/go_router.dart';
 
 import '../screens/auth/business_selection_screen.dart';
+import '../screens/auth/game_intro_screen.dart';
 import '../screens/auth/login_screen.dart';
+import '../screens/cash_session/cash_session_screen.dart';
 import '../screens/clients/clients_list_screen.dart';
 import '../screens/clients/new_client_screen.dart';
 import '../screens/collections/client_visit_screen.dart';
@@ -13,8 +15,13 @@ import '../screens/dashboard/statistics_dashboard_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
-    initialLocation: '/business-selection',
+    initialLocation: '/game-intro',
     routes: [
+      GoRoute(
+        path: '/game-intro',
+        name: 'game-intro',
+        builder: (context, state) => const GameIntroScreen(),
+      ),
       GoRoute(
         path: '/business-selection',
         name: 'business-selection',
@@ -67,6 +74,14 @@ class AppRouter {
         path: '/new-collection',
         name: 'new-collection',
         builder: (context, state) => const NewCollectionScreen(),
+      ),
+      GoRoute(
+        path: '/cash-session/:sessionId',
+        name: 'cash-session',
+        builder: (context, state) {
+          final sessionId = state.pathParameters['sessionId'] ?? '';
+          return CashSessionScreen(sessionId: sessionId);
+        },
       ),
     ],
   );

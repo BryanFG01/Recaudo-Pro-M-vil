@@ -6,8 +6,20 @@ class CreateCreditUseCase {
 
   CreateCreditUseCase(this.repository);
 
-  Future<CreditEntity> call(CreditEntity credit, {String? businessId}) async {
-    return await repository.createCredit(credit, businessId: businessId);
+  Future<CreditEntity> call(
+    CreditEntity credit, {
+    String? businessId,
+    String? businessCode,
+    String? userNumber,
+    String? documentId,
+  }) async {
+    return await repository.createCredit(
+      credit,
+      businessId: businessId,
+      businessCode: businessCode,
+      userNumber: userNumber,
+      documentId: documentId,
+    );
   }
 }
 

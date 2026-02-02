@@ -6,8 +6,8 @@ class GetCreditsUseCase {
 
   GetCreditsUseCase(this.repository);
 
-  Future<List<CreditEntity>> call() {
-    return repository.getCredits();
+  Future<List<CreditEntity>> call(String businessId) {
+    return repository.getCredits(businessId);
   }
 }
 

@@ -6,8 +6,9 @@ class SearchClientsUseCase {
 
   SearchClientsUseCase(this.repository);
 
-  Future<List<ClientEntity>> call(String query) {
-    return repository.searchClients(query);
+  Future<List<ClientEntity>> call(
+      String businessId, String userId, String query) {
+    return repository.searchClients(businessId, userId, query);
   }
 }
 

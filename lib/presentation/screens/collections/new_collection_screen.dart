@@ -164,10 +164,10 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
         throw Exception('Usuario no autenticado');
       }
 
-      // Get the client's credit
+      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
       final creditRepository = ref.read(creditRepositoryProvider);
       final credits =
-          await creditRepository.getCreditsByClientId(_selectedClient!.id);
+          await creditRepository.getCreditsByClientId(businessId, _selectedClient!.id);
 
       if (credits.isEmpty) {
         throw Exception('El cliente no tiene créditos activos');
@@ -202,9 +202,6 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
             : _notesController.text.trim(),
       );
 
-      // Obtener business_id del negocio seleccionado
-      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
-
       await createCollectionUseCase(collection, businessId: businessId);
 
       // Actualizar el crédito: disminuir el totalBalance
@@ -221,6 +218,8 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
         lastPaymentDate: DateTime.now(),
         createdAt: currentCredit.createdAt,
         nextDueDate: currentCredit.nextDueDate,
+        interestRate: currentCredit.interestRate,
+        totalInterest: currentCredit.totalInterest,
       );
 
       // Actualizar el crédito en la base de datos

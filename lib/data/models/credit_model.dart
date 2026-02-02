@@ -14,6 +14,8 @@ class CreditModel extends CreditEntity {
     super.lastPaymentDate,
     required super.createdAt,
     super.nextDueDate,
+    super.interestRate,
+    super.totalInterest,
   });
 
   factory CreditModel.fromJson(Map<String, dynamic> json) {
@@ -36,10 +38,21 @@ class CreditModel extends CreditEntity {
       nextDueDate: json['next_due_date'] != null
           ? DateTime.parse(json['next_due_date'] as String)
           : null,
+      interestRate: json['interest_rate'] != null
+          ? (json['interest_rate'] as num).toDouble()
+          : null,
+      totalInterest: json['total_interest'] != null
+          ? (json['total_interest'] as num).toDouble()
+          : null,
     );
   }
 
-  Map<String, dynamic> toJson({String? businessId}) {
+  Map<String, dynamic> toJson({
+    String? businessId,
+    String? businessCode,
+    String? userNumber,
+    String? documentId,
+  }) {
     final json = {
       'id': id,
       'client_id': clientId,
@@ -54,9 +67,12 @@ class CreditModel extends CreditEntity {
       'created_at': createdAt.toIso8601String(),
       'next_due_date': nextDueDate?.toIso8601String(),
     };
-    if (businessId != null) {
-      json['business_id'] = businessId;
-    }
+    if (interestRate != null) json['interest_rate'] = interestRate;
+    if (totalInterest != null) json['total_interest'] = totalInterest;
+    if (businessId != null) json['business_id'] = businessId;
+    if (businessCode != null) json['business_code'] = businessCode;
+    if (userNumber != null) json['user_number'] = userNumber;
+    if (documentId != null) json['document_id'] = documentId;
     return json;
   }
 }

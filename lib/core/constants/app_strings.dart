@@ -4,6 +4,8 @@ class AppStrings {
   static const String loginSubtitle =
       'Inicia sesión para continuar con tu cuenta.';
   static const String email = 'Correo Electrónico';
+  static const String userNumber = 'Número de usuario';
+  static const String enterUserNumber = 'Ingresa tu número de usuario';
   static const String password = 'Contraseña';
   static const String enterEmail = 'Ingresa tu correo electrónico';
   static const String enterPassword = 'Ingresa tu contraseña';
@@ -12,6 +14,10 @@ class AppStrings {
   static const String orLoginWith = 'O inicia sesión con';
   static const String noAccount =
       '¿No tienes una cuenta? Comunícate con el administrador';
+
+  /// Mensaje cuando el usuario está inactivo (is_active: false) en la API.
+  static const String userInactiveMessage =
+      'Tu cuenta no está activa. Debe comunicarse con el administrador del negocio para poder ingresar.';
 
   // Dashboard
   static const String hello = 'Hola';
@@ -35,6 +41,7 @@ class AppStrings {
   static const String week = 'Semana';
   static const String month = 'Mes';
   static const String totalCollected = 'Total Recaudado';
+  static const String totalAcumulado = 'Total acumulado';
   static const String activeCredits = 'Créditos Activos';
   static const String clientsInArrears = 'Clientes en Mora';
   static const String weeklyCollection = 'Recaudo Semanal';
@@ -84,6 +91,15 @@ class AppStrings {
   static const String enterEmail2 = 'ejemplo@correo.com';
   static const String documentIdOptional = 'Cédula / ID (Opcional)';
   static const String enterDocumentId = 'Número de identificación';
+  static const String documentFileUrlOptional = 'URL del documento (Opcional)';
+  static const String enterDocumentFileUrl =
+      'https://storage.../documento.pdf o .jpg';
+  static const String takeDocumentPhoto = 'Tomar foto del documento';
+  static const String documentPhotoCaptured = 'Foto del documento capturada';
+  static const String cameraNotAvailableOnWeb =
+      'La cámara no está disponible en la versión web. Usa la app en un dispositivo móvil (Android o iOS).';
+  static const String cameraPluginNotLinked =
+      'La cámara no está disponible. Cierra la app por completo, ábrela de nuevo e intenta otra vez. Si usas emulador, prueba en un dispositivo físico.';
   static const String saveClient = 'Guardar Cliente';
   static const String clientCreatedSuccessfully = 'Cliente creado exitosamente';
 
@@ -140,14 +156,48 @@ class AppStrings {
   static const String installmentAmount = 'Monto de la Cuota';
   static const String fullNameOfClient = 'Nombre Completo del Cliente';
   static const String registerPayment = 'Registrar Abono';
-  
+
   // Credit Renewal
   static const String noOutstandingBalance = 'Sin Saldo Pendiente';
   static const String clientPaidOff = 'El cliente ya está sin saldo pendiente';
   static const String renewCredit = 'Renovar Crédito';
   static const String renewCreditConfirmation = '¿Deseas renovar el crédito?';
-  static const String renewCreditMessage = 'Se renovará el crédito por el mismo monto original. Si hay deuda pendiente, se descontará del nuevo crédito.';
-  static const String creditRenewedSuccessfully = 'Crédito renovado exitosamente';
+  static const String renewCreditMessage =
+      'Se renovará el crédito por el mismo monto original. Si hay deuda pendiente, se descontará del nuevo crédito.';
+  static const String creditRenewedSuccessfully =
+      'Crédito renovado exitosamente';
   static const String cancel = 'Cancelar';
   static const String confirm = 'Confirmar';
+
+  // Sesión de caja / Retiros
+  static const String cashSession = 'Sesión de Caja';
+  static const String cashSessionAndWithdrawals = 'Sesión de Caja y Retiros';
+  static const String cashSessionSubtitle = 'Retiros y saldo';
+  static const String noActiveCashSession =
+      'No hay sesión de caja activa. Contacta al administrador.';
+  static const String initialBalance = 'Saldo Inicial';
+  static const String saldoDisponible = 'Saldo disponible';
+  static const String cajaInicialRestante = 'Saldo inicial restante';
+  static const String withdrawal = 'Retiro';
+  static const String newWithdrawal = 'Nuevo Retiro';
+  static const String amount = 'Monto';
+  static const String reason = 'Motivo';
+  static const String enterAmount = 'Ingrese el monto';
+  static const String enterReason = 'Ej: Pago a proveedor';
+  static const String requestWithdrawal = 'Solicitar Retiro';
+  static const String withdrawalRequested =
+      'Retiro solicitado. Pendiente de aprobación del administrador.';
+  static const String withdrawalApproved =
+      'Tu retiro fue aprobado por el administrador.';
+  static const String myWithdrawals = 'Mis Retiros';
+  static const String noWithdrawals = 'No hay retiros';
+  static const String pendingApproval = 'Pendiente de aprobación';
+  static const String approved = 'Aprobado';
+  static const String pendingWithdrawalsAlert =
+      'Tienes retiros pendientes de aprobación del administrador.';
+  static const String withdrawalApprovedNotification =
+      'Tu retiro fue aprobado por el administrador.';
+  static String withdrawalsApprovedCount(int n) => n == 1
+      ? 'Tu retiro fue aprobado por el administrador.'
+      : 'Tienes $n retiros aprobados por el administrador.';
 }

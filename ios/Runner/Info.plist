@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>RecaudoPro necesita acceso a la cámara para capturar fotos del documento del cliente.</string>
 </dict>
 </plist>

@@ -8,6 +8,8 @@ class UserEntity extends Equatable {
   final String? avatarUrl;
   final String? employeeCode;
   final String? phone;
+  /// Número de usuario (usado por el back para login y en clients/credits/collections).
+  final String? number;
   final String role;
   final double commissionPercentage;
   final bool isActive;
@@ -20,6 +22,7 @@ class UserEntity extends Equatable {
     this.avatarUrl,
     this.employeeCode,
     this.phone,
+    this.number,
     this.role = 'cobrador',
     this.commissionPercentage = 0,
     this.isActive = true,
@@ -34,6 +37,7 @@ class UserEntity extends Equatable {
         avatarUrl,
         employeeCode,
         phone,
+        number,
         role,
         commissionPercentage,
         isActive,

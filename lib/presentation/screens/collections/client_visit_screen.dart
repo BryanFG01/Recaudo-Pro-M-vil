@@ -2,6 +2,7 @@ import 'package:RecaudoPro/domain/entities/client_entity.dart';
 import 'package:RecaudoPro/domain/entities/collection_entity.dart';
 import 'package:RecaudoPro/domain/entities/credit_entity.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/business_helper.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/business_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
@@ -43,28 +45,81 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
   List<dynamic>? _cachedData; // Cachear datos para evitar pantalla negra
 
   @override
+  void initState() {
+    super.initState();
+    // Agregar listener para formatear el monto con separadores de miles
+    _amountController.addListener(_formatAmount);
+  }
+
+  @override
   void dispose() {
+    _amountController.removeListener(_formatAmount);
     _amountController.dispose();
     _transactionController.dispose();
     super.dispose();
   }
 
+  // Formatear el monto con separadores de miles
+  void _formatAmount() {
+    final text = _amountController.text;
+    final selection = _amountController.selection;
+
+    // Remover todas las comas y caracteres no numéricos
+    final cleanedText = text.replaceAll(RegExp(r'[^\d]'), '');
+
+    if (cleanedText.isEmpty) {
+      if (text.isNotEmpty) {
+        // Si hay texto pero no números, limpiar
+        _amountController.value = const TextEditingValue(
+          text: '',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+      }
+      return;
+    }
+
+    // Convertir a número
+    final number = int.tryParse(cleanedText);
+    if (number == null) {
+      return;
+    }
+
+    // Formatear con separadores de miles
+    final formatted = NumberFormat('#,###').format(number);
+
+    // Solo actualizar si el texto formateado es diferente al actual
+    if (formatted != text) {
+      // Calcular nueva posición del cursor
+      final cursorPosition = selection.baseOffset;
+      final textBeforeCursor = text.substring(0, cursorPosition);
+      final cleanedBeforeCursor =
+          textBeforeCursor.replaceAll(RegExp(r'[^\d]'), '');
+      final newCursorPosition =
+          formatted.length - (cleanedText.length - cleanedBeforeCursor.length);
+
+      _amountController.value = TextEditingValue(
+        text: formatted,
+        selection: TextSelection.collapsed(
+          offset: newCursorPosition.clamp(0, formatted.length),
+        ),
+      );
+    }
+  }
+
   Future<List<dynamic>> _loadClientData() async {
-    // Obtener cliente y créditos
+    final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
     final client =
         await ref.read(clientRepositoryProvider).getClientById(widget.clientId);
     final credits = await ref
         .read(creditRepositoryProvider)
-        .getCreditsByClientId(widget.clientId);
+        .getCreditsByClientId(businessId, widget.clientId);
 
-    // Obtener el crédito actual (el más reciente o el activo)
     final credit = credits.isNotEmpty ? credits.first : null;
 
-    // Obtener colecciones del crédito actual si existe, sino lista vacía
     final collections = credit != null
         ? await ref
             .read(collectionRepositoryProvider)
-            .getCollectionsByCreditId(credit.id)
+            .getCollectionsByCreditId(credit.id, businessId: businessId)
         : <CollectionEntity>[];
 
     return [client, credits, collections];
@@ -170,9 +225,10 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
     });
 
     try {
+      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
       final creditRepository = ref.read(creditRepositoryProvider);
       final credits =
-          await creditRepository.getCreditsByClientId(widget.clientId);
+          await creditRepository.getCreditsByClientId(businessId, widget.clientId);
 
       if (credits.isEmpty) {
         throw Exception('No hay créditos para este cliente');
@@ -180,13 +236,11 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
 
       final oldCredit = credits.first;
       final currentUser = ref.read(currentUserProvider);
+      final selectedBusiness = ref.read(selectedBusinessProvider);
 
-      if (currentUser == null) {
-        throw Exception('Usuario no autenticado');
+      if (currentUser == null || selectedBusiness == null) {
+        throw Exception('Usuario o negocio no disponible');
       }
-
-      // Obtener business_id del negocio seleccionado
-      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
 
       // Calcular deuda pendiente
       // Si el cliente pagó más de lo que debía (saldo negativo), hay un crédito a favor
@@ -197,21 +251,19 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       // Por ahora, si totalBalance es 0, no hay deuda pendiente
       final outstandingDebt = 0.0; // No hay deuda si el saldo es 0
 
-      // Monto original del crédito
-      final originalAmount = oldCredit.totalAmount;
+      // Monto original: principal (total_amount) e interés. Total a pagar = principal + interés
+      final originalPrincipal = oldCredit.totalAmount;
+      final originalTotalToPay =
+          oldCredit.totalAmount + (oldCredit.totalInterest ?? 0);
 
-      // Calcular nuevo monto (mismo monto original)
-      final newCreditAmount = originalAmount;
+      // Nuevo crédito mismo principal e interés
+      final newCreditAmount = originalPrincipal;
+      final newTotalToPay = originalTotalToPay;
+      final newCreditBalance = newTotalToPay - outstandingDebt;
 
-      // Calcular el saldo inicial del nuevo crédito
-      // Si hay deuda pendiente, se descuenta del nuevo crédito
-      final newCreditBalance = newCreditAmount - outstandingDebt;
-
-      // Calcular días (usar los mismos días del crédito anterior)
       final daysDifference = oldCredit.totalInstallments;
-      final dailyInstallment = newCreditAmount / daysDifference;
+      final dailyInstallment = newTotalToPay / daysDifference;
 
-      // Crear nuevo crédito
       final newCredit = CreditEntity(
         id: _uuid.v4(),
         clientId: widget.clientId,
@@ -225,10 +277,19 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         lastPaymentDate: null,
         createdAt: DateTime.now(),
         nextDueDate: DateTime.now().add(const Duration(days: 1)),
+        interestRate: oldCredit.interestRate,
+        totalInterest: oldCredit.totalInterest,
       );
 
+      final client = await ref.read(clientRepositoryProvider).getClientById(widget.clientId);
       final createCreditUseCase = ref.read(createCreditUseCaseProvider);
-      await createCreditUseCase(newCredit, businessId: businessId);
+      await createCreditUseCase(
+        newCredit,
+        businessId: businessId,
+        businessCode: selectedBusiness.code,
+        userNumber: currentUser.number ?? currentUser.employeeCode,
+        documentId: client?.documentId,
+      );
 
       if (mounted) {
         final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
@@ -268,7 +329,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
   }
 
   Future<void> _showPrintPreview(BuildContext context) async {
-    // Obtener los datos actuales
+    final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
     final clientRepository = ref.read(clientRepositoryProvider);
     final creditRepository = ref.read(creditRepositoryProvider);
     final collectionRepository = ref.read(collectionRepositoryProvider);
@@ -276,7 +337,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
     try {
       final client = await clientRepository.getClientById(widget.clientId);
       final credits =
-          await creditRepository.getCreditsByClientId(widget.clientId);
+          await creditRepository.getCreditsByClientId(businessId, widget.clientId);
 
       if (client == null || credits.isEmpty) {
         if (mounted) {
@@ -292,7 +353,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
 
       final credit = credits.first;
       final collections =
-          await collectionRepository.getCollectionsByCreditId(credit.id);
+          await collectionRepository.getCollectionsByCreditId(credit.id, businessId: businessId);
 
       // Obtener el monto del pago pendiente si hay uno en los campos
       double? pendingAmount;
@@ -403,6 +464,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
     });
 
     try {
+      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
       final clientRepository = ref.read(clientRepositoryProvider);
       final client = await clientRepository.getClientById(widget.clientId);
 
@@ -412,7 +474,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
 
       final creditRepository = ref.read(creditRepositoryProvider);
       final credits =
-          await creditRepository.getCreditsByClientId(widget.clientId);
+          await creditRepository.getCreditsByClientId(businessId, widget.clientId);
 
       if (credits.isEmpty) {
         throw Exception('No hay créditos para este cliente');
@@ -425,13 +487,12 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         throw Exception('Usuario no autenticado');
       }
 
-      // Obtener business_id del negocio seleccionado
-      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
-
       // Para cuota completa, usar el monto de la cuota diaria
+      // Remover comas del texto antes de convertir a número
+      final amountText = _amountController.text.replaceAll(',', '');
       final amount = isFullPayment
           ? credit.installmentAmount
-          : double.tryParse(_amountController.text) ?? 0;
+          : double.tryParse(amountText) ?? 0;
 
       if (amount <= 0) {
         throw Exception('El monto debe ser mayor a cero');
@@ -494,6 +555,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         lastPaymentDate: DateTime.now(),
         createdAt: currentCredit.createdAt,
         nextDueDate: currentCredit.nextDueDate,
+        interestRate: currentCredit.interestRate,
+        totalInterest: currentCredit.totalInterest,
       );
 
       // Actualizar el crédito en la base de datos
@@ -777,7 +840,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  '${AppStrings.total}: ${formatter.format(credit.totalAmount)}',
+                                  '${AppStrings.total}: ${formatter.format(credit.totalToPay)}',
                                   style: const TextStyle(
                                     color: AppColors.textSecondary,
                                     fontSize: 11,
@@ -887,12 +950,54 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       const SizedBox(height: 16),
                     ],
                     // Payment Amount Input
-                    CustomTextField(
-                      label: AppStrings.paymentAmount,
-                      hint: AppStrings.enterSpecificAmount,
-                      prefixIcon: Icons.attach_money,
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          AppStrings.paymentAmount,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          style: const TextStyle(color: AppColors.textPrimary),
+                          decoration: InputDecoration(
+                            hintText: AppStrings.enterSpecificAmount,
+                            hintStyle:
+                                const TextStyle(color: AppColors.textSecondary),
+                            prefixIcon: const Icon(Icons.attach_money,
+                                color: AppColors.textSecondary),
+                            filled: true,
+                            fillColor: AppColors.surface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                  color: AppColors.primary, width: 2),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                  color: AppColors.error, width: 2),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     // Action Buttons
@@ -972,13 +1077,13 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       )
                     else
                       Container(
+                        height: 300, // Altura fija para habilitar scroll
                         decoration: BoxDecoration(
                           color: AppColors.surface,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
+                          physics: const BouncingScrollPhysics(),
                           itemCount: collections.length,
                           separatorBuilder: (context, index) => const Divider(
                             height: 1,
