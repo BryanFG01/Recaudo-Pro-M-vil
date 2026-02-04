@@ -164,6 +164,22 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     }
   }
 
+  // Calculate number of days excluding Sundays
+  int _calculateWorkingDays(DateTime start, DateTime end) {
+    int count = 0;
+    // Normalize to midnight to ensure accurate day counting
+    DateTime current = DateTime(start.year, start.month, start.day);
+    final DateTime endDate = DateTime(end.year, end.month, end.day);
+
+    while (!current.isAfter(endDate)) {
+      if (current.weekday != DateTime.sunday) {
+        count++;
+      }
+      current = current.add(const Duration(days: 1));
+    }
+    return count;
+  }
+
   // Calculate daily installment based on amount, dates, and interest
   double _calculateDailyInstallment() {
     if (_creditAmountController.text.trim().isEmpty) return 0;
@@ -175,15 +191,17 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     if (creditAmount <= 0) return 0;
 
     final interest = double.tryParse(_interestController.text.trim()) ?? 0;
-    final daysDifference = _endDate.difference(_startDate).inDays;
 
-    if (daysDifference <= 0) return 0;
+    // Usar días hábiles (excluyendo domingos)
+    final workingDays = _calculateWorkingDays(_startDate, _endDate);
+
+    if (workingDays <= 0) return 0;
 
     // Interés = Monto × Tasa / 100. Total a pagar = Monto + Interés
     final interestAmount = creditAmount * interest / 100;
     final totalToPay = creditAmount + interestAmount;
-    // Cuota diaria = Total a pagar ÷ Días totales
-    final dailyInstallment = totalToPay / daysDifference;
+    // Cuota diaria = Total a pagar ÷ Días totales (hábiles)
+    final dailyInstallment = totalToPay / workingDays;
 
     return dailyInstallment;
   }
@@ -407,9 +425,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
         createdAt: DateTime.now(),
       );
 
-      final userNumber = currentUser.number ??
-          currentUser.employeeCode ??
-          currentUser.id;
+      final userNumber =
+          currentUser.number ?? currentUser.employeeCode ?? currentUser.id;
       await clientRepository.createClient(
         client,
         businessId: businessId,
@@ -431,14 +448,14 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
           final interestAmount = creditAmount * interest / 100;
           final totalWithInterest = creditAmount + interestAmount;
 
-          final daysDifference = _endDate.difference(_startDate).inDays;
-          if (daysDifference <= 0) {
+          final workingDays = _calculateWorkingDays(_startDate, _endDate);
+          if (workingDays <= 0) {
             throw Exception(
-                'La fecha final debe ser posterior a la fecha de inicio');
+                'El rango de fechas debe incluir al menos un día hábil (lunes a sábado)');
           }
 
-          // Cuota diaria = Total a pagar ÷ Días totales
-          final dailyInstallment = totalWithInterest / daysDifference;
+          // Cuota diaria = Total a pagar ÷ Días totales (hábiles)
+          final dailyInstallment = totalWithInterest / workingDays;
 
           // API: total_amount = principal (monto del préstamo), total_interest = monto del interés.
           // total_balance y cuotas se basan en el total a pagar (principal + interés).
@@ -447,15 +464,15 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             clientId: clientId,
             totalAmount: creditAmount, // principal
             installmentAmount: dailyInstallment,
-            totalInstallments: daysDifference,
+            totalInstallments: workingDays,
             paidInstallments: 0,
             overdueInstallments: 0,
-            totalBalance: totalWithInterest, // total a pagar (principal + interés)
+            totalBalance:
+                totalWithInterest, // total a pagar (principal + interés)
             lastPaymentAmount: 0,
             lastPaymentDate: null,
             createdAt: _startDate,
-            nextDueDate: _startDate
-                .add(const Duration(days: 1)),
+            nextDueDate: _startDate.add(const Duration(days: 1)),
             interestRate: interest,
             totalInterest: interestAmount,
           );
@@ -485,7 +502,9 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     } catch (e, st) {
       if (mounted) {
         FocusScope.of(context).unfocus();
-        final msg = e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
+        final msg = e is Exception
+            ? e.toString().replaceFirst('Exception: ', '')
+            : e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al guardar: $msg'),
@@ -508,7 +527,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     final currencyFormatter =
         NumberFormat.currency(symbol: '\$', decimalDigits: 2);
     final dailyInstallment = _calculateDailyInstallment();
-    final daysDifference = _endDate.difference(_startDate).inDays;
+    final workingDays = _calculateWorkingDays(_startDate, _endDate);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -921,7 +940,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
 
               // Calculated Daily Installment Display
               if (_creditAmountController.text.trim().isNotEmpty &&
-                  daysDifference > 0)
+                  workingDays > 0)
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -958,7 +977,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '${AppStrings.totalDays}: $daysDifference días',
+                        '${AppStrings.totalDays}: $workingDays días (sin domingos)',
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
