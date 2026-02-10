@@ -1,6 +1,7 @@
 import 'package:RecaudoPro/domain/entities/client_entity.dart';
 import 'package:RecaudoPro/domain/entities/collection_entity.dart';
 import 'package:RecaudoPro/domain/entities/credit_entity.dart';
+import 'package:RecaudoPro/domain/entities/credit_summary_entity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,7 +14,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/business_helper.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/business_provider.dart';
+import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
@@ -43,6 +44,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
   int _refreshKey = 0;
   bool _isRefreshing = false;
   List<dynamic>? _cachedData; // Cachear datos para evitar pantalla negra
+  CreditSummaryEntity? _creditSummary; // Resumen con total_balance desde API
 
   @override
   void initState() {
@@ -122,7 +124,15 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
             .getCollectionsByCreditId(credit.id, businessId: businessId)
         : <CollectionEntity>[];
 
-    return [client, credits, collections];
+    // Resumen del crédito (total_balance, total_paid) desde GET /api/credits/summary/{id}
+    CreditSummaryEntity? summary;
+    if (credit != null) {
+      summary = await ref
+          .read(creditRepositoryProvider)
+          .getCreditSummaryById(credit.id);
+    }
+
+    return [client, credits, collections, summary];
   }
 
   Future<void> _openNavigationApp(double latitude, double longitude) async {
@@ -191,143 +201,6 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
     );
   }
 
-  Future<void> _showRenewCreditDialog(BuildContext context) async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(AppStrings.renewCredit),
-          content: const Text(AppStrings.renewCreditMessage),
-          actions: <Widget>[
-            TextButton(
-              child: const Text(AppStrings.cancel),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text(AppStrings.confirm),
-              onPressed: () {
-                Navigator.of(context).pop();
-                _renewCredit();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _renewCredit() async {
-    setState(() {
-      _isRefreshing = true;
-    });
-
-    try {
-      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
-      final creditRepository = ref.read(creditRepositoryProvider);
-      final credits =
-          await creditRepository.getCreditsByClientId(businessId, widget.clientId);
-
-      if (credits.isEmpty) {
-        throw Exception('No hay créditos para este cliente');
-      }
-
-      final oldCredit = credits.first;
-      final currentUser = ref.read(currentUserProvider);
-      final selectedBusiness = ref.read(selectedBusinessProvider);
-
-      if (currentUser == null || selectedBusiness == null) {
-        throw Exception('Usuario o negocio no disponible');
-      }
-
-      // Calcular deuda pendiente
-      // Si el cliente pagó más de lo que debía (saldo negativo), hay un crédito a favor
-      // Si el cliente debe dinero, sería: totalAmount - (totalAmount - totalBalance)
-      // Pero como totalBalance ya es 0 cuando llegamos aquí, no hay deuda pendiente
-      // Sin embargo, si hubiera pagado parcialmente antes de llegar a 0,
-      // la deuda sería la diferencia entre lo pagado y lo que debía
-      // Por ahora, si totalBalance es 0, no hay deuda pendiente
-      final outstandingDebt = 0.0; // No hay deuda si el saldo es 0
-
-      // Monto original: principal (total_amount) e interés. Total a pagar = principal + interés
-      final originalPrincipal = oldCredit.totalAmount;
-      final originalTotalToPay =
-          oldCredit.totalAmount + (oldCredit.totalInterest ?? 0);
-
-      // Nuevo crédito mismo principal e interés
-      final newCreditAmount = originalPrincipal;
-      final newTotalToPay = originalTotalToPay;
-      final newCreditBalance = newTotalToPay - outstandingDebt;
-
-      final daysDifference = oldCredit.totalInstallments;
-      final dailyInstallment = newTotalToPay / daysDifference;
-
-      final newCredit = CreditEntity(
-        id: _uuid.v4(),
-        clientId: widget.clientId,
-        totalAmount: newCreditAmount,
-        installmentAmount: dailyInstallment,
-        totalInstallments: daysDifference,
-        paidInstallments: 0,
-        overdueInstallments: 0,
-        totalBalance: newCreditBalance > 0 ? newCreditBalance : 0,
-        lastPaymentAmount: 0,
-        lastPaymentDate: null,
-        createdAt: DateTime.now(),
-        nextDueDate: DateTime.now().add(const Duration(days: 1)),
-        interestRate: oldCredit.interestRate,
-        totalInterest: oldCredit.totalInterest,
-      );
-
-      final client = await ref.read(clientRepositoryProvider).getClientById(widget.clientId);
-      final createCreditUseCase = ref.read(createCreditUseCaseProvider);
-      await createCreditUseCase(
-        newCredit,
-        businessId: businessId,
-        businessCode: selectedBusiness.code,
-        userNumber: currentUser.number ?? currentUser.employeeCode,
-        documentId: client?.documentId,
-      );
-
-      if (mounted) {
-        final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              outstandingDebt > 0
-                  ? 'Crédito renovado. Deuda de ${formatter.format(outstandingDebt)} descontada. Nuevo saldo: ${formatter.format(newCreditBalance)}'
-                  : AppStrings.creditRenewedSuccessfully,
-            ),
-            backgroundColor: AppColors.success,
-          ),
-        );
-
-        // Invalidar providers y refrescar
-        ref.invalidate(creditsProvider);
-        setState(() {
-          _refreshKey++;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al renovar crédito: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isRefreshing = false;
-        });
-      }
-    }
-  }
-
   Future<void> _showPrintPreview(BuildContext context) async {
     final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
     final clientRepository = ref.read(clientRepositoryProvider);
@@ -336,8 +209,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
 
     try {
       final client = await clientRepository.getClientById(widget.clientId);
-      final credits =
-          await creditRepository.getCreditsByClientId(businessId, widget.clientId);
+      final credits = await creditRepository.getCreditsByClientId(
+          businessId, widget.clientId);
 
       if (client == null || credits.isEmpty) {
         if (mounted) {
@@ -352,8 +225,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       }
 
       final credit = credits.first;
-      final collections =
-          await collectionRepository.getCollectionsByCreditId(credit.id, businessId: businessId);
+      final collections = await collectionRepository
+          .getCollectionsByCreditId(credit.id, businessId: businessId);
 
       // Obtener el monto del pago pendiente si hay uno en los campos
       double? pendingAmount;
@@ -473,8 +346,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       }
 
       final creditRepository = ref.read(creditRepositoryProvider);
-      final credits =
-          await creditRepository.getCreditsByClientId(businessId, widget.clientId);
+      final credits = await creditRepository.getCreditsByClientId(
+          businessId, widget.clientId);
 
       if (credits.isEmpty) {
         throw Exception('No hay créditos para este cliente');
@@ -498,24 +371,21 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         throw Exception('El monto debe ser mayor a cero');
       }
 
-      // Verificar que el monto no exceda el saldo restante
-      if (amount > credit.totalBalance) {
+      // Saldo restante desde summary (API) o crédito
+      final effectiveBalance = _creditSummary?.totalBalance ?? credit.totalBalance;
+      if (amount > effectiveBalance) {
         throw Exception('El monto excede el saldo restante del préstamo');
       }
 
-      // Obtener el crédito actualizado desde la base de datos para asegurar que tenemos los datos más recientes
+      // Obtener el crédito desde la base de datos (para id y demás campos)
       final currentCredit = await creditRepository.getCreditById(credit.id);
       if (currentCredit == null) {
         throw Exception('No se encontró el crédito en la base de datos');
       }
 
-      // Calcular el nuevo saldo basado en el crédito actual
-      final newTotalBalance = currentCredit.totalBalance - amount;
-
-      // DEBUG: Verificar cálculo del saldo
-      print('DEBUG: Balance Actual: ${currentCredit.totalBalance}');
-      print('DEBUG: Monto Abono: $amount');
-      print('DEBUG: Nuevo Saldo: $newTotalBalance');
+      // Calcular el nuevo saldo usando el balance del summary (o del crédito)
+      final currentBalance = _creditSummary?.totalBalance ?? currentCredit.totalBalance;
+      final newTotalBalance = currentBalance - amount;
 
       final createCollectionUseCase = ref.read(createCollectionUseCaseProvider);
       final collection = CollectionEntity(
@@ -531,42 +401,12 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
             : null,
       );
 
-      // Crear la colección primero
+      // Crear la colección (POST /api/collections). El backend calcula
+      // total_balance, paid_installments, etc. desde las collections;
+      // no se debe llamar a PATCH /api/credits con esos campos.
       await createCollectionUseCase(collection, businessId: businessId);
 
-      // Calcular si se pagó una cuota completa (solo para cuota completa)
-      final shouldIncrementPaidInstallments = isFullPayment;
-
-      // Actualizar el crédito: disminuir el totalBalance
-      final updatedCredit = CreditEntity(
-        id: currentCredit.id,
-        clientId: currentCredit.clientId,
-        totalAmount: currentCredit.totalAmount,
-        installmentAmount: currentCredit.installmentAmount,
-        totalInstallments: currentCredit.totalInstallments,
-        paidInstallments: shouldIncrementPaidInstallments
-            ? currentCredit.paidInstallments + 1
-            : currentCredit.paidInstallments,
-        overdueInstallments: currentCredit.overdueInstallments,
-        totalBalance: newTotalBalance < 0
-            ? 0
-            : newTotalBalance, // No permitir saldo negativo
-        lastPaymentAmount: amount,
-        lastPaymentDate: DateTime.now(),
-        createdAt: currentCredit.createdAt,
-        nextDueDate: currentCredit.nextDueDate,
-        interestRate: currentCredit.interestRate,
-        totalInterest: currentCredit.totalInterest,
-      );
-
-      // Actualizar el crédito en la base de datos
-      await creditRepository.updateCredit(updatedCredit,
-          businessId: businessId);
-
-      // Esperar un momento para asegurar que la actualización se complete
-      await Future.delayed(const Duration(milliseconds: 100));
-
-      // Verificar si el saldo llegó a 0
+      // Verificar si el saldo llegó a 0 (según el cálculo local)
       final finalBalance = newTotalBalance < 0 ? 0 : newTotalBalance;
       final isPaidOff = finalBalance == 0;
 
@@ -588,8 +428,17 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
           await _showPaidOffDialog(context);
         }
 
-        // Invalidar el provider de créditos para que se actualice en otras pantallas
+        // Invalidar los providers para que se actualicen en todas pantallas
         ref.invalidate(creditsProvider);
+        ref.invalidate(dashboardStatsProvider);
+        ref.invalidate(recentCollectionsProvider);
+
+        // Invalidar familias completas relacionadas con la sesión de caja para asegurar frescura
+        ref.invalidate(cashSessionFlowProvider);
+        ref.invalidate(withdrawalsByUserProvider);
+        ref.invalidate(cashSessionByUserProvider);
+        ref.invalidate(activeCashSessionProvider);
+
         // Refrescar la vista para mostrar el nuevo recaudo y el saldo actualizado
         if (mounted) {
           setState(() {
@@ -712,6 +561,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
               final client = results[0] as ClientEntity?;
               final credits = results[1] as List<CreditEntity>;
               final collections = results[2] as List<CollectionEntity>;
+              final summary = results.length > 3
+                  ? results[3] as CreditSummaryEntity?
+                  : null;
 
               if (client == null || credits.isEmpty) {
                 return const Center(
@@ -725,6 +577,14 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
               final credit = credits.first;
               if (_creditId == null) {
                 _creditId = credit.id;
+              }
+              // Saldo restante desde API summary (disminuye con cada abono)
+              final effectiveBalance =
+                  summary?.totalBalance ?? credit.totalBalance;
+              if (summary != null && _creditSummary != summary) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) setState(() => _creditSummary = summary);
+                });
               }
               final formatter =
                   NumberFormat.currency(symbol: '\$', decimalDigits: 0);
@@ -831,7 +691,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  formatter.format(credit.totalBalance),
+                                  formatter.format(effectiveBalance),
                                   style: const TextStyle(
                                     color: AppColors.textPrimary,
                                     fontSize: 20,
@@ -1019,19 +879,6 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           : () => _handlePayment(true),
                       backgroundColor: AppColors.success,
                     ),
-                    // Botón de Renovar Crédito (solo visible cuando el saldo es 0)
-                    if (credit.totalBalance == 0) ...[
-                      const SizedBox(height: 12),
-                      CustomButton(
-                        text: AppStrings.renewCredit,
-                        onPressed: (_isLoadingPayment ||
-                                _isLoadingFullPayment ||
-                                _isRefreshing)
-                            ? null
-                            : () => _showRenewCreditDialog(context),
-                        backgroundColor: AppColors.primary,
-                      ),
-                    ],
                     const SizedBox(height: 32),
                     // Collection History
                     Row(

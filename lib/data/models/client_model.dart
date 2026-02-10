@@ -15,16 +15,34 @@ class ClientModel extends ClientEntity {
 
   factory ClientModel.fromJson(Map<String, dynamic> json) {
     return ClientModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      phone: json['phone'] as String,
+      id: _str(json['id'], ''),
+      name: _str(json['name'], ''),
+      phone: _str(json['phone'], ''),
       documentId: json['document_id'] as String?,
       documentFileUrl: json['document_file_url'] as String?,
       address: json['address'] as String?,
-      latitude: json['latitude'] as double?,
-      longitude: json['longitude'] as double?,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      latitude: _toDoubleOrNull(json['latitude']),
+      longitude: _toDoubleOrNull(json['longitude']),
+      createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
     );
+  }
+
+  static String _str(dynamic value, String defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is String) return value;
+    return value.toString();
+  }
+
+  static double? _toDoubleOrNull(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return null;
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   Map<String, dynamic> toJson({

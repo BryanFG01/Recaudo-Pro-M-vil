@@ -60,7 +60,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
                   _buildSummaryCard(
                     context,
                     'Clientes activos',
-                    stats.activeCredits.toDouble(),
+                    stats.totalClients.toDouble(),
                     isNumber: true,
                   ),
                 ],

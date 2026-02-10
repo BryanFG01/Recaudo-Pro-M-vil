@@ -12,6 +12,7 @@ class CreateCreditUseCase {
     String? businessCode,
     String? userNumber,
     String? documentId,
+    String? cashSessionId,
   }) async {
     return await repository.createCredit(
       credit,
@@ -19,6 +20,7 @@ class CreateCreditUseCase {
       businessCode: businessCode,
       userNumber: userNumber,
       documentId: documentId,
+      cashSessionId: cashSessionId,
     );
   }
 }

@@ -204,17 +204,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     fontSize: 16,
                   ),
                 ),
-                if (selectedBusiness == null) ...[
-                  const SizedBox(height: 16),
-                  TextButton.icon(
-                    onPressed: () => context.go('/business-selection'),
-                    icon: const Icon(Icons.business, color: AppColors.primary),
-                    label: const Text(
-                      'Seleccionar negocio',
-                      style: TextStyle(color: AppColors.primary),
-                    ),
+                // Siempre mostrar opción para ir a selección de negocio (visible con o sin negocio seleccionado)
+                const SizedBox(height: 16),
+                TextButton.icon(
+                  onPressed: () => context.go('/business-selection'),
+                  icon: const Icon(Icons.business, color: AppColors.primary),
+                  label: Text(
+                    selectedBusiness == null
+                        ? 'Seleccionar negocio'
+                        : 'Cambiar negocio',
+                    style: const TextStyle(color: AppColors.primary),
                   ),
-                ],
+                ),
                 const SizedBox(height: 30),
                 // Número de usuario (acepta números y letras)
                 CustomTextField(

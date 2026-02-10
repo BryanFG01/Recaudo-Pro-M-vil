@@ -71,10 +71,11 @@ final dashboardStatsProvider =
     startDate: startDate,
     endDate: endDate,
     filterClientIds: filterClientIds,
+    filterUserId: currentUser.id,
   );
 });
 
-/// Recaudos recientes filtrados por "mis" clientes (solo recaudos de clientes del usuario).
+/// Recaudos recientes del usuario actual: solo recaudos hechos por él (userId) y de sus clientes.
 final recentCollectionsProvider =
     FutureProvider<List<CollectionEntity>>((ref) async {
   final currentUser = ref.watch(currentUserProvider);
@@ -87,7 +88,8 @@ final recentCollectionsProvider =
     limit: 50,
   );
   return all
-      .where((c) => myClientIds.contains(c.clientId))
+      .where((c) =>
+          c.userId == currentUser.id && myClientIds.contains(c.clientId))
       .take(10)
       .toList();
 });

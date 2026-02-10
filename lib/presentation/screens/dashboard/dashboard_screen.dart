@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/business_provider.dart';
 import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
@@ -58,6 +59,7 @@ class DashboardScreen extends ConsumerWidget {
                 Navigator.of(dialogContext).pop();
                 ref.read(authRepositoryProvider).signOut().then((_) {
                   ref.read(currentUserProvider.notifier).setUser(null);
+                  ref.read(selectedBusinessProvider.notifier).clearBusiness();
                   context.go('/login');
                 });
               },

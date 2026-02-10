@@ -15,16 +15,34 @@ class CollectionModel extends CollectionEntity {
 
   factory CollectionModel.fromJson(Map<String, dynamic> json) {
     return CollectionModel(
-      id: json['id'] as String,
-      creditId: json['credit_id'] as String,
-      clientId: json['client_id'] as String,
-      amount: (json['amount'] as num).toDouble(),
-      paymentDate: DateTime.parse(json['payment_date'] as String),
+      id: _str(json['id'], ''),
+      creditId: _str(json['credit_id'], ''),
+      clientId: _str(json['client_id'], ''),
+      amount: _toDouble(json['amount'], 0),
+      paymentDate: _parseDate(json['payment_date']) ?? DateTime.now(),
       notes: json['notes'] as String?,
-      userId: json['user_id'] as String,
+      userId: _str(json['user_id'], ''),
       paymentMethod: json['payment_method'] as String?,
       transactionReference: json['transaction_reference'] as String?,
     );
+  }
+
+  static String _str(dynamic value, String defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is String) return value;
+    return value.toString();
+  }
+
+  static double _toDouble(dynamic value, double defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is num) return value.toDouble();
+    return defaultValue;
+  }
+
+  static DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
   }
 
   Map<String, dynamic> toJson({String? businessId}) {

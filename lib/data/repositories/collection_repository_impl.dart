@@ -53,12 +53,14 @@ class CollectionRepositoryImpl implements CollectionRepository {
     DateTime? startDate,
     DateTime? endDate,
     Set<String>? filterClientIds,
+    String? filterUserId,
   }) {
     return remoteDataSource.getDashboardStats(
       businessId: businessId,
       startDate: startDate,
       endDate: endDate,
       filterClientIds: filterClientIds,
+      filterUserId: filterUserId,
     );
   }
 

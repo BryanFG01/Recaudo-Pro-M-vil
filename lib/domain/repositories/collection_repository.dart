@@ -22,6 +22,7 @@ abstract class CollectionRepository {
     DateTime? startDate,
     DateTime? endDate,
     Set<String>? filterClientIds,
+    String? filterUserId,
   });
   Future<List<Map<String, dynamic>>> getWeeklyCollection({
     String? businessId,

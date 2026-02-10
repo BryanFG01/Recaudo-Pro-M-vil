@@ -10,6 +10,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/collection_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
+import '../../../domain/entities/credit_summary_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
@@ -29,6 +30,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
   bool _isOptimized = false;
   Position? _currentPosition;
   List<dynamic> _sortedCredits = [];
+  final Map<String, double> _distances = {};
   // Cache para evitar reconstrucciones innecesarias
   final Map<String, Map<String, dynamic>> _dataCache = {};
   // Datos precargados para mejor rendimiento
@@ -43,6 +45,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
 
     final preloaded = <String, Map<String, dynamic>>{};
 
+    final creditRepository = ref.read(creditRepositoryProvider);
     for (final credit in credits) {
       final cacheKey = '${credit.id}_${credit.clientId}';
       if (!preloaded.containsKey(cacheKey)) {
@@ -53,10 +56,12 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   credit.id,
                   businessId: businessId,
                 ),
+            creditRepository.getCreditSummaryById(credit.id),
           ]);
           preloaded[cacheKey] = {
             'client': results[0],
             'collections': results[1],
+            'summary': results[2],
           };
         } catch (e) {
           // Si hay error, continuar con el siguiente
@@ -181,6 +186,13 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
       // Ordenar por distancia (más cerca primero)
       creditsWithDistance.sort((a, b) =>
           (a['distance'] as double).compareTo(b['distance'] as double));
+
+      _distances.clear();
+      for (var item in creditsWithDistance) {
+        final credit = item['credit'] as CreditEntity;
+        _distances[credit.id] = item['distance'] as double;
+      }
+
       _sortedCredits =
           creditsWithDistance.map((item) => item['credit']).toList();
     } else {
@@ -380,8 +392,9 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
 
     final client = cachedData['client'] as ClientEntity?;
     final collections = cachedData['collections'] as List<CollectionEntity>;
+    final summary = cachedData['summary'] as CreditSummaryEntity?;
 
-    return _buildCreditCardContent(credit, client, collections);
+    return _buildCreditCardContent(credit, client, collections, summary);
   }
 
   Widget _buildCreditCard(credit) {
@@ -390,15 +403,21 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     final cachedData = _dataCache[cacheKey];
 
     final businessId = ref.read(currentUserProvider)?.businessId;
+    final creditRepository = ref.read(creditRepositoryProvider);
     return FutureBuilder<List<dynamic>>(
       future: cachedData != null
-          ? Future.value([cachedData['client'], cachedData['collections']])
+          ? Future.value([
+              cachedData['client'],
+              cachedData['collections'],
+              cachedData['summary'],
+            ])
           : Future.wait<dynamic>([
               ref.read(clientRepositoryProvider).getClientById(credit.clientId),
               ref.read(collectionRepositoryProvider).getCollectionsByCreditId(
                     credit.id,
                     businessId: businessId,
                   ),
+              creditRepository.getCreditSummaryById(credit.id),
             ]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
@@ -423,24 +442,34 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
         final results = snapshot.data!;
         final client = results[0] as ClientEntity?;
         final collections = results[1] as List<CollectionEntity>;
+        final summary = results.length > 2
+            ? results[2] as CreditSummaryEntity?
+            : null;
 
         // Guardar en cache si no estaba
         if (cachedData == null && snapshot.hasData) {
           _dataCache[cacheKey] = {
             'client': client,
             'collections': collections,
+            'summary': summary,
           };
         }
 
-        return _buildCreditCardContent(credit, client, collections);
+        return _buildCreditCardContent(credit, client, collections, summary);
       },
     );
   }
 
-  Widget _buildCreditCardContent(CreditEntity credit, ClientEntity? client,
-      List<CollectionEntity> collections) {
+  Widget _buildCreditCardContent(
+    CreditEntity credit,
+    ClientEntity? client,
+    List<CollectionEntity> collections, [
+    CreditSummaryEntity? summary,
+  ]) {
     final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
     final dateFormatter = DateFormat('dd/MM/yyyy');
+    // Saldo restante desde API summary (como en la web), no del listado de créditos
+    final effectiveBalance = summary?.totalBalance ?? credit.totalBalance;
 
     final clientName = client?.name ?? 'Cliente';
     final clientPhone = client?.phone ?? '';
@@ -461,12 +490,16 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     final startDate = credit.createdAt;
     final endDate = startDate.add(Duration(days: credit.totalInstallments));
 
-    // Calcular cuotas atrasadas basándose en fechas
-    final calculatedOverdueInstallments =
-        _calculateOverdueInstallments(credit, collections);
+    // Calcular cuotas atrasadas (usar saldo efectivo para considerar crédito pagado)
+    final calculatedOverdueInstallments = effectiveBalance <= 0
+        ? 0
+        : _calculateOverdueInstallments(credit, collections);
 
-    // Obtener los últimos 3 abonos
-    final lastCollections = collections.take(3).toList();
+    // Ordenar por fecha de pago (más reciente primero) para mostrar siempre el último abono real
+    final sortedByDate = List<CollectionEntity>.from(collections)
+      ..sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+    final lastCollections = sortedByDate.take(3).toList();
+    final lastPayment = sortedByDate.isNotEmpty ? sortedByDate.first : null;
 
     return RepaintBoundary(
       child: InkWell(
@@ -558,6 +591,36 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   style: const TextStyle(
                     color: AppColors.primary,
                     fontSize: 14,
+                  ),
+                ),
+              ],
+              if (_isOptimized && _distances.containsKey(credit.id)) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.directions_car,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'A ${_distances[credit.id]!.toStringAsFixed(2)} km',
+                        style: const TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -672,9 +735,9 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          formatter.format(credit.totalBalance),
+                          formatter.format(effectiveBalance),
                           style: TextStyle(
-                            color: credit.totalBalance > 0
+                            color: effectiveBalance > 0
                                 ? AppColors.error
                                 : AppColors.success,
                             fontSize: 18,
@@ -741,8 +804,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   ),
                   _buildInfoColumn(
                     AppStrings.lastPaymentLabel,
-                    credit.lastPaymentDate != null
-                        ? dateFormatter.format(credit.lastPaymentDate!)
+                    lastPayment != null
+                        ? dateFormatter.format(lastPayment.paymentDate)
                         : 'N/A',
                     valueColor: AppColors.textSecondary,
                   ),

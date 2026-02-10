@@ -10,6 +10,7 @@ import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/collection_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
@@ -166,8 +167,8 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
 
       final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
       final creditRepository = ref.read(creditRepositoryProvider);
-      final credits =
-          await creditRepository.getCreditsByClientId(businessId, _selectedClient!.id);
+      final credits = await creditRepository.getCreditsByClientId(
+          businessId, _selectedClient!.id);
 
       if (credits.isEmpty) {
         throw Exception('El cliente no tiene créditos activos');
@@ -237,6 +238,13 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
         ref.invalidate(dashboardStatsProvider);
         ref.invalidate(recentCollectionsProvider);
         ref.invalidate(creditsProvider);
+
+        // Invalidar familias completas relacionadas con la sesión de caja
+        ref.invalidate(cashSessionFlowProvider);
+        ref.invalidate(withdrawalsByUserProvider);
+        ref.invalidate(cashSessionByUserProvider);
+        ref.invalidate(activeCashSessionProvider);
+
         context.pop();
       }
     } catch (e) {

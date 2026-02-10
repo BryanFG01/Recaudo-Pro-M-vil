@@ -70,7 +70,8 @@ final cashSessionByUserProvider =
   return useCase(userId);
 });
 
-/// Flujo de caja por sesión (GET /api/cash-sessions/flow/:id). Devuelve cash_flow_by_session:
+/// Flujo de caja por sesión (GET /api/cash-sessions/flow/:id). Devuelve cash_flow_by_session.
+/// El backend no debe borrar recaudo al actualizar saldo inicial; solo actualizar initial_balance.
 /// caja_inicial_restante, total_collected, total_recaudo_mostrado, saldo_disponible, efectivo_en_caja.
 /// Saldo disponible = saldo inicial + recaudo (initial_balance + total_collected − retiros). Al aprobar retiros se invalida para ver descuentos.
 /// Si sessionId está vacío, no llama a la API y devuelve null.
