@@ -11,6 +11,10 @@ import '../models/cash_session_flow_model.dart';
 import '../models/cash_session_model.dart';
 import '../models/withdrawal_model.dart';
 
+/// IMPORTANTE - Backend: Al actualizar o ingresar un nuevo saldo inicial (PATCH/POST initial_balance),
+/// el backend NUNCA debe borrar ni reiniciar el recaudo (total_collected, collections). Solo debe
+/// actualizar el campo initial_balance de la sesión existente. Perder el recaudo al cambiar el
+/// saldo inicial es un error de negocio.
 abstract class CashSessionRemoteDataSource {
   Future<CashSessionEntity?> getCashSessionById(String id);
   /// Flujo de caja por sesión (GET /api/cash-sessions/flow/:id).

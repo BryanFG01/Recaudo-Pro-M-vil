@@ -15,6 +15,7 @@ import '../../../domain/entities/withdrawals_data_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
 import '../../providers/collection_provider.dart';
+import '../../providers/credit_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/stat_card.dart';
@@ -142,6 +143,26 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     final flowAsync = isActiveRoute && (effectiveSessionId?.isNotEmpty == true)
         ? ref.watch(cashSessionFlowProvider(effectiveSessionId!))
         : const AsyncValue<CashSessionFlowEntity?>.data(null);
+    // Total recaudo real = suma de total_paid de GET /api/credits/summary?business_id=&user_id=
+    final totalRecaudoRealAsync = user != null && isActiveRoute
+        ? ref.watch(totalRecaudoRealProvider(
+            (businessId: user.businessId, userId: user.id)))
+        : const AsyncValue<double>.data(0);
+    // Ventas (lo que se presta) hoy = suma de totalAmount de créditos creados hoy (fallback si flow no trae total_credits)
+    final totalVentasHoyAsync = user != null && isActiveRoute
+        ? ref.watch(totalVentasHoyProvider(
+            (businessId: user.businessId, userId: user.id)))
+        : const AsyncValue<double>.data(0);
+    // Ventas por sesión (créditos con cash_session_id = esta sesión). Fallback cuando flow.totalCredits se pierde al actualizar caja inicial.
+    final totalVentasPorSesionAsync = user != null &&
+            isActiveRoute &&
+            effectiveSessionId != null &&
+            effectiveSessionId.isNotEmpty
+        ? ref.watch(totalVentasPorSesionProvider(
+            (businessId: user.businessId,
+                userId: user.id,
+                sessionId: effectiveSessionId)))
+        : const AsyncValue<double>.data(0);
     final sessionAsync =
         isActiveRoute ? null : ref.watch(cashSessionProvider(widget.sessionId));
 
@@ -201,8 +222,16 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             if (isActiveRoute) {
               ref.invalidate(cashSessionByUserProvider(user.id));
               ref.invalidate(dashboardStatsProvider(0));
+              ref.invalidate(totalRecaudoRealProvider(
+                  (businessId: user.businessId, userId: user.id)));
+              ref.invalidate(totalVentasHoyProvider(
+                  (businessId: user.businessId, userId: user.id)));
               if (effectiveSessionId != null && effectiveSessionId.isNotEmpty) {
                 ref.invalidate(cashSessionFlowProvider(effectiveSessionId));
+                ref.invalidate(totalVentasPorSesionProvider(
+                    (businessId: user.businessId,
+                        userId: user.id,
+                        sessionId: effectiveSessionId)));
               }
             }
             ref.invalidate(withdrawalsByUserProvider(user.id));
@@ -228,13 +257,17 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                         }
                       });
                     }
-                    final recaudoTotal =
-                        dashboardStatsAsync.valueOrNull?.totalCollected ?? 0.0;
+                    final recaudoTotal = totalRecaudoRealAsync.valueOrNull ??
+                        dashboardStatsAsync.valueOrNull?.totalCollected ??
+                        0.0;
                     return _buildContentFromWithdrawalsData(
                       data,
                       cashSession: session,
                       flowAsync: flowAsync,
                       recaudoTotal: recaudoTotal,
+                      totalRecaudoRealAsync: totalRecaudoRealAsync,
+                      totalVentasHoyAsync: totalVentasHoyAsync,
+                      totalVentasPorSesionAsync: totalVentasPorSesionAsync,
                       hasSessionId: effectiveSessionId != null &&
                           effectiveSessionId.isNotEmpty,
                     );
@@ -295,12 +328,15 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     );
   }
 
-  /// Contenido: card saldo inicial y total recaudo desde flow (GET /api/cash-sessions/flow/:id); form retiro; historial mis retiros.
+  /// Contenido: card saldo inicial, total recaudo, ventas (lo que se presta), saldo a favor/en contra; form retiro; historial mis retiros.
   Widget _buildContentFromWithdrawalsData(
     WithdrawalsDataEntity data, {
     CashSessionEntity? cashSession,
     required AsyncValue<CashSessionFlowEntity?> flowAsync,
     double recaudoTotal = 0.0,
+    AsyncValue<double>? totalRecaudoRealAsync,
+    AsyncValue<double>? totalVentasHoyAsync,
+    AsyncValue<double>? totalVentasPorSesionAsync,
     bool hasSessionId = false,
   }) {
     final flow = flowAsync.valueOrNull;
@@ -316,22 +352,12 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             : (data.withdrawals.isNotEmpty
                 ? data.withdrawals.first.cashSessionId
                 : null));
-    // Total recaudo mostrado = total_collected − total_withdrawals_approved. Lo calculamos en frontend
-    // para que el descuento coincida siempre con la suma de retiros aprobados (evita errores del backend).
-    final double totalRecaudoMostrado;
-    final bool totalRecaudoLoading;
-    if (hasSessionId) {
-      totalRecaudoLoading = flowAsync.isLoading;
-      if (flow != null) {
-        totalRecaudoMostrado =
-            flow.totalCollected - flow.totalWithdrawalsApproved;
-      } else {
-        totalRecaudoMostrado = 0.0;
-      }
-    } else {
-      totalRecaudoLoading = false;
-      totalRecaudoMostrado = recaudoTotal;
-    }
+    // Total recaudo = suma de total_paid de todos los créditos del usuario (GET /api/credits/summary).
+    final double totalRecaudoMostrado = recaudoTotal;
+    final bool totalRecaudoLoading =
+        totalRecaudoRealAsync?.isLoading ?? flowAsync.isLoading;
+
+    final bool canWithdraw = flow?.allowedToWithdraw ?? true;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -340,7 +366,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         StatCard(
           title: AppStrings.initialBalance,
           amount: initialBalance,
-          subtitle: 'Sesión de caja',
+          subtitle: 'Base de efectivo al iniciar sesión',
         ),
         const SizedBox(height: 16),
         // Card Total recaudo (flow: total_collected − total_withdrawals_approved)
@@ -349,73 +375,133 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             : StatCard(
                 title: AppStrings.totalCollected,
                 amount: totalRecaudoMostrado,
-                subtitle: 'Dentro de sesión de caja',
+                subtitle: flow != null
+                    ? 'Recaudo: ${NumberFormat.simpleCurrency().format(flow.totalCollected)} | Retiros: ${NumberFormat.simpleCurrency().format(flow.totalWithdrawalsApproved)}'
+                    : 'Dentro de sesión de caja',
               ),
+        // Ventas (lo que se presta): si flow.totalCredits es 0 al actualizar caja inicial, usamos suma por sesión.
+        const SizedBox(height: 16),
+        _buildVentasCard(
+          _ventasParaMostrar(
+            flow?.totalCredits,
+            totalVentasPorSesionAsync?.valueOrNull,
+            totalVentasHoyAsync?.valueOrNull,
+            flow != null,
+          ),
+          isLoading: flow == null && (totalVentasHoyAsync?.isLoading ?? false),
+        ),
         if (flow != null) ...[
           const SizedBox(height: 16),
           StatCard(
             title: AppStrings.cajaInicialRestante,
-            amount: flow.cajaInicialRestante,
-            subtitle: 'Vista de saldo inicial restante',
+            amount: initialBalance -
+                flow.totalWithdrawalsApproved -
+                _ventasParaMostrar(flow.totalCredits,
+                    totalVentasPorSesionAsync?.valueOrNull,
+                    totalVentasHoyAsync?.valueOrNull, true),
+            subtitle: 'Lo que queda de caja (inicial − retiros − préstamos)',
           ),
           const SizedBox(height: 16),
           StatCard(
             title: AppStrings.saldoDisponible,
-            amount: flow.saldoDisponibleCalculado,
-            subtitle:
-                'Saldo inicial + recaudo (balance inicial + recaudo − retiros aprobados)', // TODO: traducir
+            amount: initialBalance -
+                flow.totalWithdrawalsApproved -
+                _ventasParaMostrar(flow.totalCredits,
+                    totalVentasPorSesionAsync?.valueOrNull,
+                    totalVentasHoyAsync?.valueOrNull, true) +
+                totalRecaudoMostrado,
+            subtitle: 'Saldo inicial restante + Total recaudo',
           ),
         ],
+        const SizedBox(height: 16),
+        _buildSaldoFavorEnContraCard(
+          initialBalance: initialBalance,
+          totalVentas: _ventasParaMostrar(
+            flow?.totalCredits,
+            totalVentasPorSesionAsync?.valueOrNull,
+            totalVentasHoyAsync?.valueOrNull,
+            flow != null,
+          ),
+          totalRetiros: flow?.totalWithdrawalsApproved ??
+              data.withdrawals
+                  .where((w) => w.isApproved)
+                  .fold<double>(0, (s, w) => s + w.amount),
+          totalRecaudo: totalRecaudoMostrado,
+        ),
         const SizedBox(height: 24),
         // Formulario Nuevo Retiro
-        Text(
-          AppStrings.newWithdrawal,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        if (!canWithdraw)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.error.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.error.withOpacity(0.3)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.lock_outline, color: AppColors.error),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'No tienes permisos para realizar retiros en este momento.',
+                    style: TextStyle(color: AppColors.error, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else ...[
+          Text(
+            AppStrings.newWithdrawal,
+            style: const TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              CustomTextField(
-                label: AppStrings.amount,
-                hint: 'Ej: 20.000',
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                prefixIcon: Icons.attach_money,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  ThousandsSeparatorInputFormatter(),
-                ],
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return 'Ingrese el monto';
-                  final n = ThousandsSeparatorInputFormatter.parse(v);
-                  if (n == null || n <= 0) return 'Monto inválido';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              CustomTextField(
-                label: AppStrings.reason,
-                hint: AppStrings.enterReason,
-                controller: _reasonController,
-                prefixIcon: Icons.description_outlined,
-              ),
-              const SizedBox(height: 20),
-              CustomButton(
-                text: AppStrings.requestWithdrawal,
-                onPressed: _isLoading
-                    ? null
-                    : () => _submitWithdrawal(effectiveSessionId),
-                isLoading: _isLoading,
-              ),
-            ],
+          const SizedBox(height: 12),
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                CustomTextField(
+                  label: AppStrings.amount,
+                  hint: 'Ej: 20.000',
+                  controller: _amountController,
+                  keyboardType: TextInputType.number,
+                  prefixIcon: Icons.attach_money,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    ThousandsSeparatorInputFormatter(),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty)
+                      return 'Ingrese el monto';
+                    final n = ThousandsSeparatorInputFormatter.parse(v);
+                    if (n == null || n <= 0) return 'Monto inválido';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                CustomTextField(
+                  label: AppStrings.reason,
+                  hint: AppStrings.enterReason,
+                  controller: _reasonController,
+                  prefixIcon: Icons.description_outlined,
+                ),
+                const SizedBox(height: 20),
+                CustomButton(
+                  text: AppStrings.requestWithdrawal,
+                  onPressed: _isLoading
+                      ? null
+                      : () => _submitWithdrawal(effectiveSessionId),
+                  isLoading: _isLoading,
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: 28),
         // Historial Mis retiros
         Text(
@@ -434,6 +520,22 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         _buildWithdrawalsList(data.withdrawals),
       ],
     );
+  }
+
+  /// Ventas a mostrar: 1) flow.totalCredits si > 0; 2) suma por sesión (cash_session_id); 3) si sigue 0 (p. ej. API no envía cash_session_id) usar total del summary del usuario.
+  double _ventasParaMostrar(
+    double? flowTotalCredits,
+    double? totalVentasPorSesion,
+    double? totalVentasHoy,
+    bool hasFlow,
+  ) {
+    if (hasFlow) {
+      if (flowTotalCredits != null && flowTotalCredits > 0) return flowTotalCredits;
+      if ((totalVentasPorSesion ?? 0) > 0) return totalVentasPorSesion!;
+      // Fallback: API puede no devolver cash_session_id en créditos; usar total del summary para no quedar en 0.
+      return totalVentasHoy ?? 0;
+    }
+    return totalVentasHoy ?? 0;
   }
 
   Widget _buildTotalRecaudoLoadingCard() {
@@ -464,6 +566,122 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           const SizedBox(height: 4),
           Text(
             'Dentro de sesión de caja',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Card "Ventas (lo que se presta)": salida de caja por préstamos. Se muestra como monto negativo en rojo.
+  Widget _buildVentasCard(double amount, {bool isLoading = false}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'VENTAS (LO QUE SE PRESTA)',
+            style: TextStyle(
+              color: AppColors.error.withOpacity(0.9),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const SizedBox(
+              height: 32,
+              width: 32,
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 2,
+              ),
+            )
+          else
+            Text(
+              '-\$ ${NumberFormat('#,###.##', 'es').format(amount)}',
+              style: const TextStyle(
+                color: AppColors.error,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'Salida de caja por préstamos.',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Total de caja = dinero que debe tener el usuario. Caja inicial − ventas + recaudo − retiros (sumando y restando).
+  Widget _buildSaldoFavorEnContraCard({
+    required double initialBalance,
+    required double totalVentas,
+    required double totalRetiros,
+    required double totalRecaudo,
+  }) {
+    final totalCaja =
+        initialBalance - totalVentas - totalRetiros + totalRecaudo;
+    final aFavor = totalCaja >= 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: aFavor
+              ? AppColors.success.withOpacity(0.5)
+              : AppColors.error.withOpacity(0.5),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Total de caja',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            aFavor ? 'Saldo a favor' : 'Saldo en contra',
+            style: TextStyle(
+              color: aFavor ? AppColors.success : AppColors.error,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${aFavor ? '' : '-'}\$ ${NumberFormat('#,###.##', 'es').format(aFavor ? totalCaja : -totalCaja)}',
+            style: TextStyle(
+              color: aFavor ? AppColors.success : AppColors.error,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Caja inicial : Ingresos- ventas+ recaudo - gastos- retiros.',
             style: const TextStyle(
               color: AppColors.textSecondary,
               fontSize: 12,

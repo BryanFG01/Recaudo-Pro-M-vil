@@ -2,6 +2,9 @@ import 'package:equatable/equatable.dart';
 
 /// Fila de la vista cash_flow_by_session (GET /api/cash-sessions/flow/:id).
 /// saldo_disponible / efectivo_en_caja = saldo inicial + recaudo (initial_balance + total_collected − retiros aprobados).
+///
+/// Regla de negocio: Al cambiar/ingresar un nuevo saldo inicial, el recaudo (total_collected / collections)
+/// NUNCA debe perderse. El backend debe actualizar solo initial_balance sin tocar el recaudo.
 class CashSessionFlowEntity extends Equatable {
   final String cashSessionId;
   final String? businessId;
@@ -38,9 +41,16 @@ class CashSessionFlowEntity extends Equatable {
     this.efectivoEnCaja = 0,
   });
 
-  /// Saldo disponible = saldo inicial + recaudo (initial_balance + total_collected − retiros aprobados).
-  /// Equivalente a efectivo_en_caja. Se calcula para garantizar la fórmula en frontend.
-  double get saldoDisponibleCalculado => initialBalance + totalRecaudoMostrado;
+  /// Saldo disponible = saldo inicial + recaudo − retiros − préstamos desembolsados.
+  double get saldoDisponibleCalculado =>
+      initialBalance + totalRecaudoMostrado - totalWithdrawalsApproved - totalCredits;
+
+  /// Lo que queda de caja inicial = saldo inicial − retiros − préstamos desembolsados (créditos de esta sesión).
+  double get cajaInicialRestanteCalculado =>
+      initialBalance - totalWithdrawalsApproved - totalCredits;
+
+  /// Saldo disponible = saldo inicial restante + total recaudo (descuenta retiros y préstamos).
+  double get saldoDisponibleCajaYRecaudo => cajaInicialRestanteCalculado + totalRecaudoMostrado;
 
   @override
   List<Object?> get props => [

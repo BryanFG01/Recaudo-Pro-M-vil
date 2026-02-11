@@ -1,4 +1,5 @@
 import '../../domain/entities/credit_entity.dart';
+import '../../domain/entities/credit_summary_entity.dart';
 import '../../domain/repositories/credit_repository.dart';
 import '../datasources/credit_remote_datasource.dart';
 
@@ -25,12 +26,24 @@ class CreditRepositoryImpl implements CreditRepository {
   }
 
   @override
+  Future<CreditSummaryEntity?> getCreditSummaryById(String creditId) {
+    return remoteDataSource.getCreditSummaryById(creditId);
+  }
+
+  @override
+  Future<List<CreditSummaryEntity>> getCreditsSummaryByUser(
+      String businessId, String userId) {
+    return remoteDataSource.getCreditsSummaryByUser(businessId, userId);
+  }
+
+  @override
   Future<CreditEntity> createCredit(
     CreditEntity credit, {
     String? businessId,
     String? businessCode,
     String? userNumber,
     String? documentId,
+    String? cashSessionId,
   }) {
     return remoteDataSource.createCredit(
       credit,
@@ -38,6 +51,7 @@ class CreditRepositoryImpl implements CreditRepository {
       businessCode: businessCode,
       userNumber: userNumber,
       documentId: documentId,
+      cashSessionId: cashSessionId,
     );
   }
 

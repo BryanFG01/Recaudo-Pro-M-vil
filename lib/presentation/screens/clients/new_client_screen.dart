@@ -13,10 +13,12 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/business_helper.dart';
+import '../../../domain/entities/business_entity.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/business_provider.dart';
+import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/credit_provider.dart';
 import '../../widgets/custom_button.dart';
@@ -370,8 +372,16 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
       final selectedBusiness = ref.read(selectedBusinessProvider);
       final currentUser = ref.read(currentUserProvider);
-      if (selectedBusiness == null || currentUser == null) {
-        throw Exception('Negocio o usuario no disponible');
+      if (currentUser == null) {
+        throw Exception('Usuario no disponible. Vuelve a iniciar sesión.');
+      }
+      // Si no hay negocio seleccionado (p. ej. tras esperar en la vista), usar el del usuario actual
+      BusinessEntity? business = selectedBusiness;
+      if (business == null) {
+        business = await ref.read(businessRepositoryProvider).getBusinessById(currentUser.businessId);
+      }
+      if (business == null) {
+        throw Exception('Negocio no disponible. Selecciona un negocio o vuelve a entrar.');
       }
 
       // Subir foto del documento si se capturó; obtener URL para document_file_url
@@ -427,10 +437,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
 
       final userNumber =
           currentUser.number ?? currentUser.employeeCode ?? currentUser.id;
-      await clientRepository.createClient(
+      final createdClient = await clientRepository.createClient(
         client,
         businessId: businessId,
-        businessCode: selectedBusiness.code,
+        businessCode: business.code,
         userId: currentUser.id,
         userNumber: userNumber,
       );
@@ -457,11 +467,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
           // Cuota diaria = Total a pagar ÷ Días totales (hábiles)
           final dailyInstallment = totalWithInterest / workingDays;
 
-          // API: total_amount = principal (monto del préstamo), total_interest = monto del interés.
-          // total_balance y cuotas se basan en el total a pagar (principal + interés).
+          // Usar el id del cliente devuelto por la API (no el UUID local)
           final credit = CreditEntity(
             id: _uuid.v4(),
-            clientId: clientId,
+            clientId: createdClient.id,
             totalAmount: creditAmount, // principal
             installmentAmount: dailyInstallment,
             totalInstallments: workingDays,
@@ -477,12 +486,17 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             totalInterest: interestAmount,
           );
 
+          // Sesión de caja activa: enviar cash_session_id para que el backend sume esta venta en total_credits
+          final activeSession =
+              await ref.read(cashSessionByUserProvider(currentUser.id).future);
+
           await createCreditUseCase(
             credit,
             businessId: businessId,
-            businessCode: selectedBusiness.code,
+            businessCode: business.code,
             userNumber: userNumber,
             documentId: client.documentId,
+            cashSessionId: activeSession?.id,
           );
         }
       }
@@ -494,9 +508,22 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             backgroundColor: AppColors.success,
           ),
         );
-        // Refresh clients and credits lists
+        // Refresh clients and credits lists; ventas y recaudo para Sesión de Caja
         ref.invalidate(clientsProvider);
         ref.invalidate(creditsProvider);
+        ref.invalidate(totalVentasHoyProvider(
+            (businessId: currentUser.businessId, userId: currentUser.id)));
+        ref.invalidate(totalRecaudoRealProvider(
+            (businessId: currentUser.businessId, userId: currentUser.id)));
+        // Refrescar flow de sesión de caja para que total_credits incluya este crédito
+        final session = await ref.read(cashSessionByUserProvider(currentUser.id).future);
+        if (session?.id != null && session!.id.isNotEmpty) {
+          ref.invalidate(cashSessionFlowProvider(session.id));
+          ref.invalidate(totalVentasPorSesionProvider(
+              (businessId: currentUser.businessId,
+                  userId: currentUser.id,
+                  sessionId: session.id)));
+        }
         context.pop();
       }
     } catch (e, st) {
@@ -505,6 +532,25 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
         final msg = e is Exception
             ? e.toString().replaceFirst('Exception: ', '')
             : e.toString();
+        // 404 "Cliente no encontrado" al crear suele indicar sesión inválida en el backend; cerrar sesión y redirigir a login.
+        final is404Session = msg.contains('404') || msg.contains('Cliente no encontrado');
+        if (is404Session) {
+          await ref.read(authRepositoryProvider).signOut();
+          ref.read(currentUserProvider.notifier).clearUser();
+          ref.read(selectedBusinessProvider.notifier).clearBusiness();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Tu sesión pudo haber expirado. Inicia sesión de nuevo para crear clientes.'),
+                backgroundColor: AppColors.warning,
+                duration: Duration(seconds: 5),
+              ),
+            );
+            context.go('/login');
+          }
+          return;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al guardar: $msg'),

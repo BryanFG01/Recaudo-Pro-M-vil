@@ -31,6 +31,7 @@ abstract class CollectionRemoteDataSource {
     DateTime? startDate,
     DateTime? endDate,
     Set<String>? filterClientIds,
+    String? filterUserId,
   });
   Future<List<Map<String, dynamic>>> getWeeklyCollection({String? businessId});
 }
@@ -172,6 +173,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     DateTime? startDate,
     DateTime? endDate,
     Set<String>? filterClientIds,
+    String? filterUserId,
   }) async {
     if (businessId == null || businessId.isEmpty) {
       throw Exception('business_id requerido para estadísticas');
@@ -181,6 +183,10 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     if (filterClientIds != null && filterClientIds.isNotEmpty) {
       final ids = filterClientIds;
       list = list.where((c) => ids.contains(c.clientId)).toList();
+    }
+    // Solo recaudos hechos por este usuario (recaudo del día = del cobrador actual)
+    if (filterUserId != null && filterUserId.isNotEmpty) {
+      list = list.where((c) => c.userId == filterUserId).toList();
     }
     final now = DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day);
@@ -221,6 +227,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
 
     int activeCredits = 0;
     int clientsInArrears = 0;
+    final activeClientIds = <String>{};
     if (_creditDataSource != null) {
       try {
         var credits = await _creditDataSource!.getCreditsByBusiness(businessId);
@@ -228,8 +235,19 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
           final ids = filterClientIds;
           credits = credits.where((cr) => ids.contains(cr.clientId)).toList();
         }
-        for (final cr in credits) {
-          if (cr.totalBalance > 0) activeCredits++;
+        // Usar saldo del summary (GET /api/credits/summary/{id}) para contar activos;
+        // el listado a veces devuelve total_balance en 0.
+        final summaries = await Future.wait(
+          credits.map((cr) => _creditDataSource!.getCreditSummaryById(cr.id)),
+        );
+        for (var i = 0; i < credits.length; i++) {
+          final cr = credits[i];
+          final summary = summaries[i];
+          final balance = summary?.totalBalance ?? cr.totalBalance;
+          if (balance > 0) {
+            activeCredits++;
+            activeClientIds.add(cr.clientId);
+          }
           if (cr.overdueInstallments > 0) clientsInArrears++;
         }
       } catch (_) {}
@@ -266,7 +284,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
       cashCount: cashCount,
       transactionCount: transactionCount,
       weeklyCollectionData: weeklyCollectionData,
-      totalClients: activeCredits,
+      totalClients: activeClientIds.length,
     );
   }
 

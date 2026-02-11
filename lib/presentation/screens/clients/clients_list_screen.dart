@@ -27,16 +27,36 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
     super.dispose();
   }
 
+  /// Devuelve el primer crédito del cliente (si tiene). No filtra por saldo.
   Future<CreditEntity?> _getClientCredit(String clientId) async {
     try {
       final credits = await ref.read(creditsProvider.future);
-      return credits.firstWhere(
-        (credit) => credit.clientId == clientId && credit.totalBalance > 0,
-        orElse: () => throw Exception('No credit'),
-      );
-    } catch (e) {
+      return credits.firstWhere((credit) => credit.clientId == clientId);
+    } on StateError {
       return null;
     }
+  }
+
+  /// Para un crédito, obtiene el saldo real desde GET /api/credits/summary/{id}.
+  /// Si el listado devuelve total_balance 0, el backend puede tener el saldo correcto en el summary.
+  Future<double> _getCreditBalance(CreditEntity credit) async {
+    try {
+      final summary = await ref
+          .read(creditRepositoryProvider)
+          .getCreditSummaryById(credit.id);
+      return summary?.totalBalance ?? credit.totalBalance;
+    } catch (e) {
+      return credit.totalBalance;
+    }
+  }
+
+  /// Crédito del cliente y saldo real (desde summary). Así "Debe" se basa en el saldo del backend.
+  Future<({CreditEntity? credit, double balance})> _getClientDebtInfo(
+      String clientId) async {
+    final credit = await _getClientCredit(clientId);
+    if (credit == null) return (credit: null, balance: 0.0);
+    final balance = await _getCreditBalance(credit);
+    return (credit: credit, balance: balance);
   }
 
   Future<void> _callClient(String phone) async {
@@ -332,11 +352,11 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
   }
 
   Widget _buildClientCard(ClientEntity client) {
-    return FutureBuilder<CreditEntity?>(
-      future: _getClientCredit(client.id),
+    return FutureBuilder<({CreditEntity? credit, double balance})>(
+      future: _getClientDebtInfo(client.id),
       builder: (context, snapshot) {
-        final hasDebt = snapshot.data != null;
-        final credit = snapshot.data;
+        final data = snapshot.data;
+        final hasDebt = data != null && data.balance > 0;
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -386,10 +406,10 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                             ),
                           ),
                         ),
-                        if (credit != null) ...[
+                        if (data != null && data.balance > 0) ...[
                           const SizedBox(width: 8),
                           Text(
-                            '\$${credit.totalBalance.toStringAsFixed(0)}',
+                            '\$${data.balance.toStringAsFixed(0)}',
                             style: const TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 12,

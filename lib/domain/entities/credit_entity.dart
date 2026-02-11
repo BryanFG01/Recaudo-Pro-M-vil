@@ -17,6 +17,8 @@ class CreditEntity extends Equatable {
   final double? interestRate;
   /// Monto total del interés (total_amount * interest_rate / 100).
   final double? totalInterest;
+  /// Sesión de caja a la que pertenece el crédito (si aplica). Para calcular ventas por sesión.
+  final String? cashSessionId;
 
   /// Total a pagar (principal + interés). Para mostrar "total del crédito" en UI.
   double get totalToPay => totalAmount + (totalInterest ?? 0);
@@ -36,6 +38,7 @@ class CreditEntity extends Equatable {
     this.nextDueDate,
     this.interestRate,
     this.totalInterest,
+    this.cashSessionId,
   });
 
   @override
@@ -54,6 +57,7 @@ class CreditEntity extends Equatable {
         nextDueDate,
         interestRate,
         totalInterest,
+        cashSessionId,
       ];
 }
 

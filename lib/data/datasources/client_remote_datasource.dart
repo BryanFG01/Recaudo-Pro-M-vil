@@ -157,13 +157,14 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
     }
     final url = ApiConfig.buildApiUrl('/api/clients');
     // Body según API: name, phone, document_id, document_file_url, address, latitude, longitude,
-    // business_id, business_code, user_id, user_number (sin id ni created_at)
+    // business_id, business_code, user_id, user_number (sin id ni created_at).
+    // No enviar null en campos opcionales: algunos backends devuelven 404 si interpretan mal la petición.
     final body = <String, dynamic>{
       'name': client.name,
       'phone': client.phone,
-      'document_id': client.documentId,
-      'document_file_url': client.documentFileUrl,
-      'address': client.address,
+      'document_id': client.documentId ?? '',
+      'document_file_url': client.documentFileUrl ?? '',
+      'address': client.address ?? '',
       'latitude': client.latitude,
       'longitude': client.longitude,
       'business_id': businessId,
@@ -186,6 +187,11 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
         }
       } catch (_) {
         if (response.body.isNotEmpty) message += '\n${response.body}';
+      }
+      // 404 al crear suele indicar que el backend no encontró usuario/negocio o sesión inválida al volver a la pantalla.
+      if (response.statusCode == 404) {
+        message =
+            'No se pudo crear el cliente. Si acabas de volver a esta pantalla, intenta de nuevo o cierra sesión y vuelve a entrar. ($message)';
       }
       throw Exception(message);
     }

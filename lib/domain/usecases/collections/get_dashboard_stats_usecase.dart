@@ -11,12 +11,14 @@ class GetDashboardStatsUseCase {
     DateTime? startDate,
     DateTime? endDate,
     Set<String>? filterClientIds,
+    String? filterUserId,
   }) {
     return repository.getDashboardStats(
       businessId: businessId,
       startDate: startDate,
       endDate: endDate,
       filterClientIds: filterClientIds,
+      filterUserId: filterUserId,
     );
   }
 }
