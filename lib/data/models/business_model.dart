@@ -17,7 +17,7 @@ class BusinessModel extends BusinessEntity {
 
   factory BusinessModel.fromJson(Map<String, dynamic> json) {
     return BusinessModel(
-      id: json['id'] as String,
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
       name: json['name'] as String,
       code: json['code'] as String,
       description: json['description'] as String?,
@@ -47,4 +47,3 @@ class BusinessModel extends BusinessEntity {
     };
   }
 }
-

@@ -13,9 +13,11 @@ abstract class ClientRemoteDataSource {
   /// Sube el archivo del documento y devuelve la URL pública. Endpoint: POST /api/upload (multipart).
   Future<String?> uploadDocumentFile(File file, {String? businessId});
 
-  Future<List<ClientEntity>> getClientsByBusiness(String businessId, String userId);
+  Future<List<ClientEntity>> getClientsByBusiness(
+      String businessId, String userId);
   Future<ClientEntity?> getClientById(String id);
-  Future<List<ClientEntity>> searchClients(String businessId, String userId, String query);
+  Future<List<ClientEntity>> searchClients(
+      String businessId, String userId, String query);
   Future<ClientEntity> createClient(
     ClientEntity client, {
     String? businessId,
@@ -24,6 +26,16 @@ abstract class ClientRemoteDataSource {
     String? userNumber,
   });
   Future<ClientEntity> updateClient(ClientEntity client);
+
+  /// Crea una nueva versión del cliente preservando el registro original.
+  /// Endpoint: POST /api/clients/{clientId}/version
+  Future<ClientEntity> versionClient(
+    ClientEntity client, {
+    String? businessId,
+    String? businessCode,
+    String? userId,
+    String? userNumber,
+  });
 }
 
 class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
@@ -41,12 +53,13 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
     String fileName = file.path.split(RegExp(r'[/\\]')).last;
     final lower = fileName.toLowerCase();
     final bool isPng = lower.endsWith('.png');
-    if (fileName.isEmpty || (!lower.endsWith('.jpg') && !lower.endsWith('.jpeg') && !isPng)) {
-      fileName = 'document_${DateTime.now().millisecondsSinceEpoch}.${isPng ? 'png' : 'jpg'}';
+    if (fileName.isEmpty ||
+        (!lower.endsWith('.jpg') && !lower.endsWith('.jpeg') && !isPng)) {
+      fileName =
+          'document_${DateTime.now().millisecondsSinceEpoch}.${isPng ? 'png' : 'jpg'}';
     }
-    final contentType = isPng
-        ? MediaType('image', 'png')
-        : MediaType('image', 'jpeg');
+    final contentType =
+        isPng ? MediaType('image', 'png') : MediaType('image', 'jpeg');
     request.files.add(http.MultipartFile.fromBytes(
       'file',
       bytes,
@@ -127,7 +140,10 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       throw Exception('Error al obtener cliente: ${response.statusCode}');
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return ClientModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return ClientModel.fromJson(raw);
   }
 
   @override
@@ -151,7 +167,10 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
     String? userId,
     String? userNumber,
   }) async {
-    if (businessId == null || businessCode == null || userId == null || userNumber == null) {
+    if (businessId == null ||
+        businessCode == null ||
+        userId == null ||
+        userNumber == null) {
       throw Exception(
           'Faltan business_id, business_code, user_id o user_number para crear cliente');
     }
@@ -172,11 +191,14 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       'user_id': userId,
       'user_number': userNumber,
     };
+    debugPrint('Create Client Request Body: ${jsonEncode(body)}');
     final response = await http.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
+    debugPrint('Create Client Response Status: ${response.statusCode}');
+    debugPrint('Create Client Response Body: ${response.body}');
     if (response.statusCode != 200 && response.statusCode != 201) {
       String message = 'Error al crear cliente: ${response.statusCode}';
       try {
@@ -196,32 +218,106 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       throw Exception(message);
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return ClientModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return ClientModel.fromJson(raw);
   }
 
   @override
   Future<ClientEntity> updateClient(ClientEntity client) async {
     final url = ApiConfig.buildApiUrl('/api/clients/${client.id}');
-    final model = ClientModel(
-      id: client.id,
-      name: client.name,
-      phone: client.phone,
-      documentId: client.documentId,
-      documentFileUrl: client.documentFileUrl,
-      address: client.address,
-      latitude: client.latitude,
-      longitude: client.longitude,
-      createdAt: client.createdAt,
-    );
+    debugPrint('Update Client URL: $url');
+    debugPrint('Update Client ID: ${client.id}');
+    // El backend rechaza "id" y "created_at" en el PATCH (Error 400).
+    // Enviamos solo los campos mutables.
+    final body = <String, dynamic>{
+      'name': client.name,
+      'phone': client.phone,
+      'document_id': client.documentId ?? '',
+      'document_file_url': client.documentFileUrl ?? '',
+      'address': client.address ?? '',
+      'latitude': client.latitude,
+      'longitude': client.longitude,
+    };
+    debugPrint('Update Client Request Body: ${jsonEncode(body)}');
     final response = await http.patch(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(model.toJson()),
+      body: jsonEncode(body),
     );
+    debugPrint('Update Client Response Status: ${response.statusCode}');
+    debugPrint('Update Client Response Body: ${response.body}');
     if (response.statusCode != 200) {
-      throw Exception('Error al actualizar cliente: ${response.statusCode}');
+      String message = 'Error al actualizar cliente: ${response.statusCode}';
+      try {
+        final err = jsonDecode(response.body);
+        if (err is Map<String, dynamic>) {
+          final msg = err['message'] ?? err['error'] ?? err['detail'];
+          if (msg != null) message = msg is String ? msg : msg.toString();
+        }
+      } catch (_) {
+        if (response.body.isNotEmpty) message += '\n${response.body}';
+      }
+      throw Exception(message);
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return ClientModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return ClientModel.fromJson(raw);
+  }
+
+  @override
+  Future<ClientEntity> versionClient(
+    ClientEntity client, {
+    String? businessId,
+    String? businessCode,
+    String? userId,
+    String? userNumber,
+  }) async {
+    final url = ApiConfig.buildApiUrl('/api/clients/${client.id}/version');
+    debugPrint('Version Client URL: $url');
+    debugPrint('Version Client ID: ${client.id}');
+    final body = <String, dynamic>{
+      'name': client.name,
+      'phone': client.phone,
+      'document_id': client.documentId ?? '',
+      'document_file_url': client.documentFileUrl ?? '',
+      'address': client.address ?? '',
+      'latitude': client.latitude,
+      'longitude': client.longitude,
+    };
+    if (businessId != null) body['business_id'] = businessId;
+    if (businessCode != null) body['business_code'] = businessCode;
+    if (userId != null) body['user_id'] = userId;
+    if (userNumber != null) body['user_number'] = userNumber;
+    debugPrint('Version Client Request Body: ${jsonEncode(body)}');
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(body),
+    );
+    debugPrint('Version Client Response Status: ${response.statusCode}');
+    debugPrint('Version Client Response Body: ${response.body}');
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      String message =
+          'Error al versionar cliente: ${response.statusCode}';
+      try {
+        final err = jsonDecode(response.body);
+        if (err is Map<String, dynamic>) {
+          final msg = err['message'] ?? err['error'] ?? err['detail'];
+          if (msg != null) message = msg is String ? msg : msg.toString();
+        }
+      } catch (_) {
+        if (response.body.isNotEmpty) message += '\n${response.body}';
+      }
+      throw Exception(message);
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return ClientModel.fromJson(raw);
   }
 }

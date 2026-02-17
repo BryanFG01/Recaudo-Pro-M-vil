@@ -34,6 +34,7 @@ abstract class CollectionRemoteDataSource {
     String? filterUserId,
   });
   Future<List<Map<String, dynamic>>> getWeeklyCollection({String? businessId});
+  Future<void> deleteCollection(String id);
 }
 
 class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
@@ -41,6 +42,15 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
       : _creditDataSource = creditDataSource;
 
   final CreditRemoteDataSource? _creditDataSource;
+
+  @override
+  Future<void> deleteCollection(String id) async {
+    final url = ApiConfig.buildApiUrl('/api/collections/$id');
+    final response = await http.delete(Uri.parse(url));
+    if (response.statusCode != 200 && response.statusCode != 204) {
+      throw Exception('Error al eliminar recaudo: ${response.statusCode}');
+    }
+  }
 
   @override
   Future<List<CollectionEntity>> getCollections({String? businessId}) async {
@@ -70,7 +80,8 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final url = ApiConfig.buildApiUrlWithQuery('/api/collections', query);
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
-      throw Exception('Error al obtener recaudos recientes: ${response.statusCode}');
+      throw Exception(
+          'Error al obtener recaudos recientes: ${response.statusCode}');
     }
     final list = jsonDecode(response.body) as List<dynamic>;
     return list
@@ -89,7 +100,8 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final url = ApiConfig.buildApiUrlWithQuery('/api/collections', query);
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
-      throw Exception('Error al obtener recaudos del cliente: ${response.statusCode}');
+      throw Exception(
+          'Error al obtener recaudos del cliente: ${response.statusCode}');
     }
     final list = jsonDecode(response.body) as List<dynamic>;
     return list
@@ -108,7 +120,8 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final url = ApiConfig.buildApiUrlWithQuery('/api/collections', query);
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
-      throw Exception('Error al obtener recaudos del crédito: ${response.statusCode}');
+      throw Exception(
+          'Error al obtener recaudos del crédito: ${response.statusCode}');
     }
     final list = jsonDecode(response.body) as List<dynamic>;
     return list
@@ -164,7 +177,10 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
       throw Exception(message);
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return CollectionModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return CollectionModel.fromJson(raw);
   }
 
   @override
@@ -205,13 +221,18 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     for (final c in list) {
       totalAcumulado += c.amount;
       final d = c.paymentDate;
-      if (!d.isBefore(todayStart) && d.isBefore(todayEnd)) daily += c.amount;
+      // Recaudo del día: comparar en hora local para que sume correctamente (evitar UTC)
+      final dLocal = d.isUtc ? d.toLocal() : d;
+      if (!dLocal.isBefore(todayStart) && dLocal.isBefore(todayEnd)) {
+        daily += c.amount;
+      }
       if (!d.isBefore(weekStart)) {
         weekly += c.amount;
         final w = d.weekday;
         dailyByWeekday[w] = (dailyByWeekday[w] ?? 0) + c.amount;
         final isCash = c.paymentMethod?.toLowerCase().contains('efectivo') ??
-            c.paymentMethod?.toLowerCase().contains('cash') ?? false;
+            c.paymentMethod?.toLowerCase().contains('cash') ??
+            false;
         if (isCash) {
           cashCollection += c.amount;
           cashCount++;
@@ -254,7 +275,8 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     }
     final totalCollected = totalAcumulado;
     final totalCredits = activeCredits;
-    final upToDateCount = totalCredits > 0 ? totalCredits - clientsInArrears : 0;
+    final upToDateCount =
+        totalCredits > 0 ? totalCredits - clientsInArrears : 0;
     final upToDatePercentage =
         totalCredits > 0 ? (upToDateCount / totalCredits) * 100 : 0.0;
     final overduePercentage = 100 - upToDatePercentage;

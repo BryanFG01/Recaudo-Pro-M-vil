@@ -170,8 +170,8 @@ class AppStrings {
   static const String confirm = 'Confirmar';
 
   // Sesión de caja / Retiros
-  static const String cashSession = 'Sesión de Caja';
-  static const String cashSessionAndWithdrawals = 'Sesión de Caja y Retiros';
+  static const String cashSession = 'Retiros';
+  static const String cashSessionAndWithdrawals = 'Retiros';
   static const String cashSessionSubtitle = 'Retiros y saldo';
   static const String noActiveCashSession =
       'No hay sesión de caja activa. Contacta al administrador.';
@@ -200,4 +200,22 @@ class AppStrings {
   static String withdrawalsApprovedCount(int n) => n == 1
       ? 'Tu retiro fue aprobado por el administrador.'
       : 'Tienes $n retiros aprobados por el administrador.';
+
+  // Reportes - Caja inicial, Retiros, Gastos
+  static const String initialCash = 'Caja Inicial';
+  static const String withdrawalsReport = 'Retiros';
+  static const String withdrawalsReportSubtitle = 'Reporte de retiros y saldo';
+  static const String expenses = 'Gastos';
+  static const String expensesSubtitle = 'Registrar gastos administrativos';
+  static const String registerExpense = 'Registrar Gasto';
+  static const String expenseAmount = 'Monto del gasto';
+  static const String expenseReason = 'Motivo del gasto';
+  static const String expenseReasonHint =
+      'Describe brevemente la razón del gasto...';
+  static const String category = 'Categoría';
+  static const String categoryFuel = 'Combustible';
+  static const String categoryFood = 'Alimentación';
+  static const String expenseInfoMessage =
+      'Completa los detalles a continuación para solicitar la aprobación de un nuevo gasto administrativo.';
+  static const String expenseRegistered = 'Gasto registrado correctamente.';
 }

@@ -52,7 +52,8 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
 
   /// Crédito del cliente y saldo real (desde summary). Así "Debe" se basa en el saldo del backend.
   Future<({CreditEntity? credit, double balance})> _getClientDebtInfo(
-      String clientId) async {
+    String clientId,
+  ) async {
     final credit = await _getClientCredit(clientId);
     if (credit == null) return (credit: null, balance: 0.0);
     final balance = await _getCreditBalance(credit);
@@ -94,7 +95,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
   Future<void> _openNavigationWithAddress(String address) async {
     // Codificar la dirección para URL
     final encodedAddress = Uri.encodeComponent(address);
-    
+
     try {
       // Intentar abrir Waze primero con la dirección
       final wazeUri = Uri.parse('waze://?q=$encodedAddress&navigate=yes');
@@ -120,7 +121,8 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
     try {
       // Usar Google Maps web como última opción
       final webUri = Uri.parse(
-          'https://www.google.com/maps/dir/?api=1&destination=$encodedAddress&travelmode=driving');
+        'https://www.google.com/maps/dir/?api=1&destination=$encodedAddress&travelmode=driving',
+      );
       if (await canLaunchUrl(webUri)) {
         await launchUrl(webUri, mode: LaunchMode.externalApplication);
       } else {
@@ -152,8 +154,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
 
     try {
       // Intentar abrir Google Maps app
-      final googleMapsUri =
-          Uri.parse('google.navigation:q=$latitude,$longitude');
+      final googleMapsUri = Uri.parse(
+        'google.navigation:q=$latitude,$longitude',
+      );
       if (await canLaunchUrl(googleMapsUri)) {
         await launchUrl(googleMapsUri, mode: LaunchMode.externalApplication);
         return;
@@ -165,7 +168,8 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
     try {
       // Usar Google Maps web como última opción
       final webUri = Uri.parse(
-          'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving');
+        'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=driving',
+      );
       if (await canLaunchUrl(webUri)) {
         await launchUrl(webUri, mode: LaunchMode.externalApplication);
       } else {
@@ -188,42 +192,56 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
     final clientsAsync = ref.watch(clientsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       body: SafeArea(
         child: Column(
           children: [
             // Header
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: AppColors.surface,
+              decoration: BoxDecoration(
+                color: AppColors.surface(context),
                 border: Border(
-                  bottom:
-                      BorderSide(color: AppColors.textSecondary, width: 0.5),
+                  bottom: BorderSide(
+                    color: AppColors.textSecondary(context),
+                    width: 0.5,
+                  ),
                 ),
               ),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back,
-                        color: AppColors.textPrimary),
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textPrimary(context),
+                    ),
                     onPressed: () => context.pop(),
                   ),
                   const SizedBox(width: 8),
-                  const Text(
+                  Text(
                     'Clientes',
                     style: TextStyle(
-                      color: AppColors.textPrimary,
+                      color: AppColors.textPrimary(context),
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon:
-                        const Icon(Icons.search, color: AppColors.textPrimary),
+                    icon: Icon(
+                      Icons.sync,
+                      color: AppColors.textPrimary(context),
+                    ),
+                    tooltip: 'Actualizar datos',
                     onPressed: () {
-                      // Búsqueda ya está disponible en el campo de texto
+                      ref.invalidate(clientsProvider);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Actualizando datos...'),
+                          duration: Duration(seconds: 2),
+                          backgroundColor: AppColors.primary,
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -232,23 +250,27 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
             // Search Bar
             Container(
               padding: const EdgeInsets.all(16),
-              color: AppColors.surface,
+              color: AppColors.surface(context),
               child: TextField(
                 controller: _searchController,
-                style: const TextStyle(color: AppColors.textPrimary),
+                style: TextStyle(color: AppColors.textPrimary(context)),
                 decoration: InputDecoration(
                   hintText: 'Buscar por nombre o cédula...',
-                  hintStyle: const TextStyle(color: AppColors.textSecondary),
-                  prefixIcon:
-                      const Icon(Icons.search, color: AppColors.textSecondary),
+                  hintStyle: TextStyle(color: AppColors.textSecondary(context)),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: AppColors.textSecondary(context),
+                  ),
                   filled: true,
-                  fillColor: AppColors.background,
+                  fillColor: AppColors.background(context),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 onChanged: (value) {
                   setState(() => _searchQuery = value.toLowerCase());
@@ -260,17 +282,18 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
               child: clientsAsync.when(
                 data: (clients) {
                   // Filtrar clientes por búsqueda
-                  final filteredClients = _searchQuery.isEmpty
-                      ? clients
-                      : clients.where((client) {
-                          return client.name
-                                  .toLowerCase()
-                                  .contains(_searchQuery) ||
-                              (client.documentId
-                                      ?.toLowerCase()
-                                      .contains(_searchQuery) ??
-                                  false);
-                        }).toList();
+                  final filteredClients =
+                      _searchQuery.isEmpty
+                          ? clients
+                          : clients.where((client) {
+                            return client.name.toLowerCase().contains(
+                                  _searchQuery,
+                                ) ||
+                                (client.documentId?.toLowerCase().contains(
+                                      _searchQuery,
+                                    ) ??
+                                    false);
+                          }).toList();
 
                   if (filteredClients.isEmpty) {
                     return Center(
@@ -280,15 +303,17 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                           Icon(
                             Icons.people_outline,
                             size: 64,
-                            color: AppColors.textSecondary.withOpacity(0.5),
+                            color: AppColors.textSecondary(
+                              context,
+                            ).withOpacity(0.5),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             _searchQuery.isEmpty
                                 ? 'No hay clientes registrados'
                                 : 'No se encontraron clientes',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: AppColors.textSecondary(context),
                               fontSize: 16,
                             ),
                           ),
@@ -303,7 +328,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                     },
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       itemCount: filteredClients.length,
                       itemBuilder: (context, index) {
                         final client = filteredClients[index];
@@ -312,36 +339,35 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                     ),
                   );
                 },
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                error: (error, stack) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        size: 64,
-                        color: AppColors.error,
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error:
+                    (error, stack) => Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: AppColors.error,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error al cargar clientes',
+                            style: const TextStyle(
+                              color: AppColors.error,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: () {
+                              ref.invalidate(clientsProvider);
+                            },
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error al cargar clientes',
-                        style: const TextStyle(
-                          color: AppColors.error,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () {
-                          ref.invalidate(clientsProvider);
-                        },
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
               ),
             ),
           ],
@@ -362,10 +388,10 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: AppColors.textSecondary.withOpacity(0.2),
+              color: AppColors.textSecondary(context).withOpacity(0.2),
               width: 1,
             ),
           ),
@@ -378,8 +404,8 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                   children: [
                     Text(
                       client.name,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: AppColors.textPrimary(context),
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -389,11 +415,14 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
-                            color: hasDebt
-                                ? AppColors.error.withOpacity(0.2)
-                                : AppColors.success.withOpacity(0.2),
+                            color:
+                                hasDebt
+                                    ? AppColors.error.withOpacity(0.2)
+                                    : AppColors.success.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -410,8 +439,8 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                           const SizedBox(width: 8),
                           Text(
                             '\$${data.balance.toStringAsFixed(0)}',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: AppColors.textSecondary(context),
                               fontSize: 12,
                             ),
                           ),
@@ -425,6 +454,19 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Renovar Button
+                  IconButton(
+                    icon: const Icon(
+                      Icons.autorenew_rounded,
+                      color: AppColors.primary,
+                      size: 24,
+                    ),
+                    onPressed:
+                        () => context.push(
+                          '/new-client/${client.id}?renovation=true',
+                        ),
+                    tooltip: 'Renovar',
+                  ),
                   // Locate Button
                   IconButton(
                     icon: const Icon(

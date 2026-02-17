@@ -26,7 +26,7 @@ class DashboardCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -36,8 +36,8 @@ class DashboardCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               title,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: AppColors.textPrimary(context),
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
               ),
@@ -46,8 +46,8 @@ class DashboardCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: AppColors.textSecondary(context),
                   fontSize: 12,
                 ),
                 textAlign: TextAlign.center,

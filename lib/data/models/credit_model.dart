@@ -20,23 +20,39 @@ class CreditModel extends CreditEntity {
   });
 
   factory CreditModel.fromJson(Map<String, dynamic> json) {
+    final raw =
+        (json['credit'] ?? json['data'] ?? json) as Map<String, dynamic>;
     return CreditModel(
-      id: _stringOrEmpty(json['id']),
-      clientId: _stringOrEmpty(json['client_id']),
-      totalAmount: _toDouble(json['total_amount'], 0),
-      installmentAmount: _toDouble(json['installment_amount'], 0),
+      id: _stringOrEmpty(raw['id'] ?? raw['_id'] ?? raw['credit_id']),
+      clientId: _stringOrEmpty(raw['client_id'] ??
+          raw['clientId'] ??
+          (raw['client'] is Map
+              ? raw['client']['id'] ?? raw['client']['_id']
+              : null)),
+      totalAmount: _toDouble(raw['total_amount'] ?? raw['totalAmount'], 0),
+      installmentAmount:
+          _toDouble(raw['installment_amount'] ?? raw['installmentAmount'], 0),
       totalInstallments: _toIntPreferred(
-          json['total_installments'], json['total_installments_created']),
-      paidInstallments: _toInt(json['paid_installments'], 0),
-      overdueInstallments: _toInt(json['overdue_installments'], 0),
-      totalBalance: _toDouble(json['total_balance'], 0),
-      lastPaymentAmount: _toDouble(json['last_payment_amount'], 0),
-      lastPaymentDate: _parseDateTime(json['last_payment_date']),
-      createdAt: _parseDateTime(json['created_at']) ?? DateTime.now(),
-      nextDueDate: _parseDateTime(json['next_due_date']),
-      interestRate: _toDoubleOrNull(json['interest_rate']),
-      totalInterest: _toDoubleOrNull(json['total_interest']),
-      cashSessionId: _stringOrEmptyNullable(json['cash_session_id']),
+          raw['total_installments'] ?? raw['totalInstallments'],
+          raw['total_installments_created']),
+      paidInstallments:
+          _toInt(raw['paid_installments'] ?? raw['paidInstallments'], 0),
+      overdueInstallments:
+          _toInt(raw['overdue_installments'] ?? raw['overdueInstallments'], 0),
+      totalBalance: _toDouble(raw['total_balance'] ?? raw['totalBalance'], 0),
+      lastPaymentAmount:
+          _toDouble(raw['last_payment_amount'] ?? raw['lastPaymentAmount'], 0),
+      lastPaymentDate:
+          _parseDateTime(raw['last_payment_date'] ?? raw['lastPaymentDate']),
+      createdAt: _parseDateTime(raw['created_at'] ?? raw['createdAt']) ??
+          DateTime.now(),
+      nextDueDate: _parseDateTime(raw['next_due_date'] ?? raw['nextDueDate']),
+      interestRate:
+          _toDoubleOrNull(raw['interest_rate'] ?? raw['interestRate']),
+      totalInterest:
+          _toDoubleOrNull(raw['total_interest'] ?? raw['totalInterest']),
+      cashSessionId: _stringOrEmptyNullable(
+          raw['cash_session_id'] ?? raw['cashSessionId']),
     );
   }
 
@@ -113,4 +129,3 @@ class CreditModel extends CreditEntity {
     return json;
   }
 }
-

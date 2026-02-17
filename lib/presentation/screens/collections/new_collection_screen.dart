@@ -61,7 +61,7 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
 
         final selected = await showModalBottomSheet<ClientEntity>(
           context: context,
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surface(context),
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
           ),
@@ -74,15 +74,15 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AppColors.textSecondary,
+                    color: AppColors.textSecondary(context),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   AppStrings.selectClient,
                   style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimary(context),
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -104,15 +104,15 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
                         ),
                         title: Text(
                           client.name,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         subtitle: Text(
                           client.phone,
                           style:
-                              const TextStyle(color: AppColors.textSecondary),
+                              TextStyle(color: AppColors.textSecondary(context)),
                         ),
                         onTap: () => Navigator.pop(context, client),
                       );
@@ -266,18 +266,18 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
+        title: Text(
           AppStrings.newCollectionTitle,
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.textPrimary(context),
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -292,10 +292,10 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
             children: [
               const SizedBox(height: 8),
               // Client Selection
-              const Text(
+              Text(
                 AppStrings.client,
                 style: TextStyle(
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondary(context),
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -306,10 +306,10 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: AppColors.surface(context),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppColors.textSecondary.withOpacity(0.3),
+                      color: AppColors.textSecondary(context).withOpacity(0.3),
                     ),
                   ),
                   child: Row(
@@ -318,7 +318,7 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
                         Icons.person_outline,
                         color: _selectedClient != null
                             ? AppColors.primary
-                            : AppColors.textSecondary,
+                            : AppColors.textSecondary(context),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -326,15 +326,15 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
                           _selectedClient?.name ?? AppStrings.selectClient,
                           style: TextStyle(
                             color: _selectedClient != null
-                                ? AppColors.textPrimary
-                                : AppColors.textSecondary,
+                                ? AppColors.textPrimary(context)
+                                : AppColors.textSecondary(context),
                             fontSize: 16,
                           ),
                         ),
                       ),
                       Icon(
                         Icons.arrow_drop_down,
-                        color: AppColors.textSecondary,
+                        color: AppColors.textSecondary(context),
                       ),
                     ],
                   ),
@@ -361,10 +361,10 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
               ),
               const SizedBox(height: 24),
               // Payment Type
-              const Text(
+              Text(
                 AppStrings.collectionType,
                 style: TextStyle(
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondary(context),
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -419,19 +419,19 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary : AppColors.surface,
+          color: isSelected ? AppColors.primary : AppColors.surface(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected
                 ? AppColors.primary
-                : AppColors.textSecondary.withOpacity(0.3),
+                : AppColors.textSecondary(context).withOpacity(0.3),
           ),
         ),
         child: Column(
           children: [
             Icon(
               icon,
-              color: isSelected ? Colors.white : AppColors.textSecondary,
+              color: isSelected ? Colors.white : AppColors.textSecondary(context),
               size: 24,
             ),
             const SizedBox(height: 8),
@@ -439,7 +439,7 @@ class _NewCollectionScreenState extends ConsumerState<NewCollectionScreen> {
               label,
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: isSelected ? Colors.white : AppColors.textPrimary,
+                color: isSelected ? Colors.white : AppColors.textPrimary(context),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

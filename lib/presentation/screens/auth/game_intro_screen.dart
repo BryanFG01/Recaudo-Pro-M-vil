@@ -66,7 +66,7 @@ class _GameIntroScreenState extends State<GameIntroScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       body: SafeArea(
         child: Stack(
           children: [
@@ -185,20 +185,20 @@ class _GameIntroScreenState extends State<GameIntroScreen>
             ),
             const SizedBox(height: 40),
             // Título del juego
-            const Text(
+            Text(
               'RecaudoPro',
               style: TextStyle(
-                color: AppColors.textPrimary,
+                color: AppColors.textPrimary(context),
                 fontSize: 42,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               'Recolector de Monedas',
               style: TextStyle(
-                color: AppColors.textSecondary,
+                color: AppColors.textSecondary(context),
                 fontSize: 20,
                 fontWeight: FontWeight.w500,
               ),
@@ -208,7 +208,7 @@ class _GameIntroScreenState extends State<GameIntroScreen>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: AppColors.surface(context),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: AppColors.primary.withOpacity(0.3),
@@ -225,11 +225,11 @@ class _GameIntroScreenState extends State<GameIntroScreen>
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Toca las monedas para recolectarlas',
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: AppColors.textPrimary(context),
                             fontSize: 16,
                           ),
                         ),
@@ -245,11 +245,11 @@ class _GameIntroScreenState extends State<GameIntroScreen>
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Text(
                           'Tienes 5 segundos para recolectar',
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: AppColors.textPrimary(context),
                             fontSize: 16,
                           ),
                         ),

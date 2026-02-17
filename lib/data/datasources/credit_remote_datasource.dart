@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
@@ -11,6 +12,7 @@ abstract class CreditRemoteDataSource {
   Future<List<CreditEntity>> getCreditsByBusiness(String businessId);
   Future<CreditEntity?> getCreditById(String id);
   Future<CreditSummaryEntity?> getCreditSummaryById(String creditId);
+
   /// GET /api/credits/summary?business_id=&user_id= → lista de resúmenes; suma total_paid = total recaudo real.
   Future<List<CreditSummaryEntity>> getCreditsSummaryByUser(
       String businessId, String userId);
@@ -25,6 +27,8 @@ abstract class CreditRemoteDataSource {
   Future<CreditEntity> updateCredit(
     CreditEntity credit, {
     String? businessId,
+    String? userNumber,
+    String? documentId,
   });
 }
 
@@ -52,7 +56,10 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
       throw Exception('Error al obtener crédito: ${response.statusCode}');
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return CreditModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return CreditModel.fromJson(raw);
   }
 
   @override
@@ -65,7 +72,10 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
           'Error al obtener resumen del crédito: ${response.statusCode}');
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return _parseCreditSummary(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return _parseCreditSummary(raw);
   }
 
   static CreditSummaryEntity _parseCreditSummary(Map<String, dynamic> json) {
@@ -113,8 +123,7 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
     final body = jsonDecode(response.body);
     final list = body is List<dynamic> ? body : <dynamic>[];
     return list
-        .map((e) => _parseCreditSummary(
-            Map<String, dynamic>.from(e as Map)))
+        .map((e) => _parseCreditSummary(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
 
@@ -160,11 +169,14 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
     if (cashSessionId != null && cashSessionId.isNotEmpty) {
       body['cash_session_id'] = cashSessionId;
     }
+    debugPrint('Create Credit Request Body: ${jsonEncode(body)}');
     final response = await http.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
     );
+    debugPrint('Create Credit Response Status: ${response.statusCode}');
+    debugPrint('Create Credit Response Body: ${response.body}');
     if (response.statusCode != 200 && response.statusCode != 201) {
       String message = 'Error al crear crédito: ${response.statusCode}';
       try {
@@ -185,34 +197,47 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
       throw Exception(message);
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return CreditModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return CreditModel.fromJson(raw);
   }
 
   @override
   Future<CreditEntity> updateCredit(
     CreditEntity credit, {
     String? businessId,
+    String? userNumber,
+    String? documentId,
   }) async {
     if (businessId == null || businessId.isEmpty) {
       throw Exception(
           'business_id es requerido para actualizar el crédito (PATCH /api/credits/{id})');
     }
     final url = ApiConfig.buildApiUrl('/api/credits/${credit.id}');
-    // Body según API: saldo, cuotas pagadas, último pago, próxima fecha,
-    // interest_rate, total_interest. Incluye business_id.
+    // El backend para renovación rechaza campos de estado actual (balance, pagos, etc.)
+    // Solo permitimos los campos descriptivos y de la nueva configuración del crédito.
+    final endDate = credit.createdAt
+        .add(Duration(days: credit.totalInstallments))
+        .toUtc()
+        .toIso8601String();
+
     final updateData = <String, dynamic>{
       'business_id': businessId,
-      'paid_installments': credit.paidInstallments,
-      'total_balance': credit.totalBalance,
-      'last_payment_amount': credit.lastPaymentAmount,
-      'overdue_installments': credit.overdueInstallments,
+      'client_id': credit.clientId,
+      'total_amount': credit.totalAmount,
+      'installment_amount': credit.installmentAmount,
+      'total_installments': credit.totalInstallments,
+      'end_date': endDate,
     };
-    if (credit.lastPaymentDate != null) {
-      updateData['last_payment_date'] =
-          credit.lastPaymentDate!.toIso8601String();
+    if (userNumber != null) updateData['user_number'] = userNumber;
+    if (documentId != null) updateData['document_id'] = documentId;
+    if (credit.cashSessionId != null && credit.cashSessionId!.isNotEmpty) {
+      updateData['cash_session_id'] = credit.cashSessionId;
     }
     if (credit.nextDueDate != null) {
-      updateData['next_due_date'] = credit.nextDueDate!.toIso8601String();
+      updateData['next_due_date'] =
+          credit.nextDueDate!.toUtc().toIso8601String();
     }
     if (credit.interestRate != null) {
       updateData['interest_rate'] = credit.interestRate;
@@ -220,11 +245,14 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
     if (credit.totalInterest != null) {
       updateData['total_interest'] = credit.totalInterest;
     }
+    debugPrint('Update Credit Request Body: ${jsonEncode(updateData)}');
     final response = await http.patch(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(updateData),
     );
+    debugPrint('Update Credit Response Status: ${response.statusCode}');
+    debugPrint('Update Credit Response Body: ${response.body}');
     if (response.statusCode != 200) {
       String message = 'Error al actualizar crédito: ${response.statusCode}';
       try {
@@ -239,6 +267,9 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
       throw Exception(message);
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return CreditModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return CreditModel.fromJson(raw);
   }
 }

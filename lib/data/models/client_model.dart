@@ -14,16 +14,19 @@ class ClientModel extends ClientEntity {
   });
 
   factory ClientModel.fromJson(Map<String, dynamic> json) {
+    final raw =
+        (json['client'] ?? json['data'] ?? json) as Map<String, dynamic>;
     return ClientModel(
-      id: _str(json['id'], ''),
-      name: _str(json['name'], ''),
-      phone: _str(json['phone'], ''),
-      documentId: json['document_id'] as String?,
-      documentFileUrl: json['document_file_url'] as String?,
-      address: json['address'] as String?,
-      latitude: _toDoubleOrNull(json['latitude']),
-      longitude: _toDoubleOrNull(json['longitude']),
-      createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
+      id: _str(raw['id'] ?? raw['_id'] ?? raw['client_id'], ''),
+      name: _str(raw['name'], ''),
+      phone: _str(raw['phone'], ''),
+      documentId: raw['document_id'] as String?,
+      documentFileUrl: raw['document_file_url'] as String?,
+      address: raw['address'] as String?,
+      latitude: _toDoubleOrNull(raw['latitude']),
+      longitude: _toDoubleOrNull(raw['longitude']),
+      createdAt:
+          _parseDate(raw['created_at'] ?? raw['createdAt']) ?? DateTime.now(),
     );
   }
 
@@ -69,4 +72,3 @@ class ClientModel extends ClientEntity {
     return json;
   }
 }
-

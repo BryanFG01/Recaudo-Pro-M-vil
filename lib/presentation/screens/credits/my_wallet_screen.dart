@@ -11,10 +11,12 @@ import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/collection_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
 import '../../../domain/entities/credit_summary_entity.dart';
+import '../../../domain/entities/payment_attempt_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
+import '../../providers/payment_attempt_provider.dart';
 import '../../widgets/app_bottom_navigation_bar.dart';
 
 class MyWalletScreen extends ConsumerStatefulWidget {
@@ -24,8 +26,22 @@ class MyWalletScreen extends ConsumerStatefulWidget {
   ConsumerState<MyWalletScreen> createState() => _MyWalletScreenState();
 }
 
+/// Filtro de estado de recaudo en Mi cartera.
+/// Pagaron = realizaron abono o pago de cuota completa (tienen al menos una colección hoy).
+/// No pagaron = registramos "No pago" (tienen intento NOT_PAID hoy).
+enum WalletFilter {
+  todos('Todos'),
+  pagaron('Pagaron (abono o cuota completa)'),
+  noPagaron('No pagaron'),
+  pendiente('Pendiente');
+
+  const WalletFilter(this.label);
+  final String label;
+}
+
 class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
   final _searchController = TextEditingController();
+  bool _isPreloading = false;
   String _searchQuery = '';
   bool _isOptimized = false;
   Position? _currentPosition;
@@ -36,19 +52,33 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
   // Datos precargados para mejor rendimiento
   Map<String, Map<String, dynamic>>? _preloadedData;
 
+  /// Al ingresar a Mi cartera no se selecciona ningún filtro; la lista se muestra al elegir uno.
+  WalletFilter? _walletFilter = null;
+
+  /// Para limpiar creditsWithActionTodayProvider cuando cambia el día (la card vuelve a aparecer al otro día).
+  DateTime? _lastActionDay;
+
   // Precargar todos los datos de una vez para mejor rendimiento
   Future<void> _preloadData(List<CreditEntity> credits) async {
-    if (_preloadedData != null) return;
+    if (_preloadedData != null || _isPreloading) return;
+
+    setState(() => _isPreloading = true);
 
     final businessId = ref.read(currentUserProvider)?.businessId;
-    if (businessId == null) return;
+    if (businessId == null) {
+      setState(() => _isPreloading = false);
+      return;
+    }
 
     final preloaded = <String, Map<String, dynamic>>{};
 
     final creditRepository = ref.read(creditRepositoryProvider);
-    for (final credit in credits) {
-      final cacheKey = '${credit.id}_${credit.clientId}';
-      if (!preloaded.containsKey(cacheKey)) {
+    final paymentAttemptRepo = ref.read(paymentAttemptRepositoryProvider);
+
+    // Fetch essential data for ALL credits in parallel where possible
+    try {
+      final futures = credits.map((credit) async {
+        final cacheKey = '${credit.id}_${credit.clientId}';
         try {
           final results = await Future.wait<dynamic>([
             ref.read(clientRepositoryProvider).getClientById(credit.clientId),
@@ -57,23 +87,32 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   businessId: businessId,
                 ),
             creditRepository.getCreditSummaryById(credit.id),
+            paymentAttemptRepo.getPaymentAttemptsByCreditId(credit.id),
           ]);
+          final attempts = results[3] as List<PaymentAttemptEntity>;
+          final collections = results[1] as List<CollectionEntity>;
           preloaded[cacheKey] = {
             'client': results[0],
-            'collections': results[1],
+            'collections': collections,
             'summary': results[2],
+            'noPaymentDays': _daysFromPaymentAttempts(attempts),
+            'hasPaymentToday': _hasPaymentToday(collections),
+            'hasNoPagoToday': _hasNoPagoToday(attempts),
           };
         } catch (e) {
-          // Si hay error, continuar con el siguiente
+          debugPrint('Error preloading card $cacheKey: $e');
         }
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _preloadedData = preloaded;
-        _dataCache.addAll(preloaded);
       });
+
+      await Future.wait(futures);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _preloadedData = preloaded;
+          _dataCache.addAll(preloaded);
+          _isPreloading = false;
+        });
+      }
     }
   }
 
@@ -83,6 +122,78 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     _dataCache.clear();
     _preloadedData = null;
     super.dispose();
+  }
+
+  /// Días acumulados sin pago desde GET /api/payment-attempts/credit/{creditId}.
+  /// El backend puede devolver accumulated_no_payment_days como null, así que
+  /// contamos directamente la cantidad de intentos NOT_PAID como fallback.
+  static int _daysFromPaymentAttempts(List<PaymentAttemptEntity> attempts) {
+    if (attempts.isEmpty) return 0;
+    final notPaidAttempts =
+        attempts.where((a) => a.status == 'NOT_PAID').toList();
+    if (notPaidAttempts.isEmpty) return 0;
+    // Intentar usar accumulated_no_payment_days del más reciente
+    final sorted = List<PaymentAttemptEntity>.from(notPaidAttempts)
+      ..sort((a, b) {
+        final ad = a.attemptDate ?? DateTime(0);
+        final bd = b.attemptDate ?? DateTime(0);
+        return bd.compareTo(ad);
+      });
+    final fromApi = sorted.first.accumulatedNoPaymentDays;
+    // Si el backend devuelve null/0, contar la cantidad de NOT_PAID
+    return fromApi > 0 ? fromApi : notPaidAttempts.length;
+  }
+
+  /// Misma fecha (año/mes/día) en zona horaria local. Evita que UTC invierta el día.
+  static bool _isToday(DateTime d) {
+    final local = d.isUtc ? d.toLocal() : d;
+    final now = DateTime.now();
+    return local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day;
+  }
+
+  /// True si hoy hubo al menos un abono o pago de cuota completa (colección).
+  static bool _hasPaymentToday(List<CollectionEntity> collections) {
+    return collections.any((c) => _isToday(c.paymentDate));
+  }
+
+  /// True si hoy se registró "No pago" (intento NOT_PAID).
+  static bool _hasNoPagoToday(List<PaymentAttemptEntity> attempts) {
+    return attempts.any((a) =>
+        a.status == 'NOT_PAID' &&
+        a.attemptDate != null &&
+        _isToday(a.attemptDate!));
+  }
+
+  /// Categoría única por crédito: un crédito es solo una de estas tres.
+  static WalletFilter _category(bool hasPaymentToday, bool hasNoPagoToday) {
+    if (hasPaymentToday) return WalletFilter.pagaron;
+    if (hasNoPagoToday) return WalletFilter.noPagaron;
+    return WalletFilter.pendiente;
+  }
+
+  /// Incluir crédito en la lista según filtro actual. Una sola validación precisa.
+  static bool _shouldShowCredit(
+    WalletFilter filter,
+    WalletFilter category,
+    bool hadActionToday,
+  ) {
+    // Con acción hoy: no mostrar en Todos ni Pendiente (la card se esconde)
+    if (hadActionToday &&
+        (filter == WalletFilter.todos || filter == WalletFilter.pendiente)) {
+      return false;
+    }
+    switch (filter) {
+      case WalletFilter.todos:
+        return true;
+      case WalletFilter.pagaron:
+        return category == WalletFilter.pagaron;
+      case WalletFilter.noPagaron:
+        return category == WalletFilter.noPagaron;
+      case WalletFilter.pendiente:
+        return category == WalletFilter.pendiente;
+    }
   }
 
   // Calcular distancia entre dos coordenadas (en kilómetros)
@@ -208,184 +319,403 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
   Widget build(BuildContext context) {
     final creditsAsync = ref.watch(creditsProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
-        ),
-        title: const Text(
-          AppStrings.myWallet,
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: AppColors.background(context),
+        appBar: AppBar(
+          backgroundColor: AppColors.background(context),
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
+            onPressed: () => context.pop(),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isOptimized ? Icons.route : Icons.route_outlined,
-              color: _isOptimized ? AppColors.primary : AppColors.textSecondary,
-            ),
-            onPressed: () {
-              final credits = creditsAsync.value ?? [];
-              _optimizeRoute(credits);
-            },
-            tooltip: _isOptimized
-                ? 'Desactivar ruta optimizada'
-                : 'Optimizar ruta (más cerca al más lejos)',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                hintText: AppStrings.searchByNameOrId,
-                hintStyle: const TextStyle(color: AppColors.textSecondary),
-                prefixIcon:
-                    const Icon(Icons.search, color: AppColors.textSecondary),
-                filled: true,
-                fillColor: AppColors.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-              onChanged: (value) {
-                setState(() => _searchQuery = value.toLowerCase());
-              },
+          title: Text(
+            AppStrings.myWallet,
+            style: TextStyle(
+              color: AppColors.textPrimary(context),
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          // Credits List
-          Expanded(
-            child: creditsAsync.when(
-              data: (credits) {
-                if (credits.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No hay créditos disponibles',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                  );
-                }
-
-                // Precargar datos si aún no se han precargado (asíncrono, no bloquea)
-                if (_preloadedData == null) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    _preloadData(credits);
-                  });
-                }
-
-                // Usar créditos ordenados si la optimización está activada, sino usar los originales
-                final creditsToShow = _isOptimized && _sortedCredits.isNotEmpty
-                    ? _sortedCredits
-                    : credits;
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: creditsToShow.length,
-                  cacheExtent: 1000, // Aumentar cache para mejor rendimiento
-                  addAutomaticKeepAlives: false,
-                  addRepaintBoundaries: true,
-                  physics: const BouncingScrollPhysics(), // Scroll más fluido
-                  itemBuilder: (context, index) {
-                    final credit = creditsToShow[index];
-                    return _buildCreditCardOptimized(credit);
-                  },
+          bottom: TabBar(
+            labelColor: AppColors.primary,
+            unselectedLabelColor: AppColors.textSecondary(context),
+            indicatorColor: AppColors.primary,
+            tabs: const [
+              Tab(text: 'Recaudo'),
+              Tab(text: 'Ventas'),
+            ],
+          ),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.sync, color: AppColors.textPrimary(context)),
+              tooltip: 'Actualizar datos',
+              onPressed: () {
+                ref.invalidate(creditsProvider);
+                setState(() {
+                  _preloadedData = null;
+                  _dataCache.clear();
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Actualizando datos...'),
+                    duration: Duration(seconds: 2),
+                    backgroundColor: AppColors.primary,
+                  ),
                 );
               },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => Center(
-                child: Text(
-                  'Error: ${error.toString()}',
-                  style: const TextStyle(color: AppColors.error),
-                ),
-              ),
             ),
-          ),
-        ],
+            IconButton(
+              icon: Icon(
+                _isOptimized ? Icons.route : Icons.route_outlined,
+                color: _isOptimized
+                    ? AppColors.primary
+                    : AppColors.textSecondary(context),
+              ),
+              onPressed: () {
+                final credits = creditsAsync.value ?? [];
+                _optimizeRoute(credits);
+              },
+              tooltip: _isOptimized
+                  ? 'Desactivar ruta optimizada'
+                  : 'Optimizar ruta (más cerca al más lejos)',
+            ),
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            _buildRecaudoTab(context, creditsAsync),
+            _buildVentasTab(context),
+          ],
+        ),
+        bottomNavigationBar: const AppBottomNavigationBar(currentIndex: 0),
       ),
-      bottomNavigationBar: const AppBottomNavigationBar(currentIndex: 0),
     );
   }
 
-  // Calcular cuotas atrasadas basándose en fechas
-  int _calculateOverdueInstallments(
-      CreditEntity credit, List<CollectionEntity> collections) {
-    // Si no tiene saldo restante, no hay cuotas atrasadas
-    if (credit.totalBalance <= 0) {
-      return 0;
-    }
+  Widget _buildRecaudoTab(
+      BuildContext context, AsyncValue<List<CreditEntity>> creditsAsync) {
+    return Column(
+      children: [
+        // Search Bar
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _searchController,
+            style: TextStyle(color: AppColors.textPrimary(context)),
+            decoration: InputDecoration(
+              hintText: AppStrings.searchByNameOrId,
+              hintStyle: TextStyle(color: AppColors.textSecondary(context)),
+              prefixIcon:
+                  Icon(Icons.search, color: AppColors.textSecondary(context)),
+              filled: true,
+              fillColor: AppColors.surface(context),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            onChanged: (value) {
+              setState(() => _searchQuery = value.toLowerCase());
+            },
+          ),
+        ),
+        // Filtro desplegable: vacío al ingresar; al seleccionar se muestra la lista
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: DropdownButtonFormField<WalletFilter?>(
+            value: _walletFilter,
+            hint: Text(
+              'Seleccione un filtro',
+              style: TextStyle(color: AppColors.textSecondary(context)),
+            ),
+            decoration: InputDecoration(
+              labelText: 'Estado de recaudo',
+              labelStyle: TextStyle(color: AppColors.textSecondary(context)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              filled: true,
+              fillColor: AppColors.surface(context),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+            dropdownColor: AppColors.surface(context),
+            style: TextStyle(color: AppColors.textPrimary(context)),
+            items: WalletFilter.values
+                .map((f) => DropdownMenuItem<WalletFilter?>(
+                      value: f,
+                      child: Text(f.label),
+                    ))
+                .toList(),
+            onChanged: (WalletFilter? value) {
+              setState(() => _walletFilter = value);
+            },
+          ),
+        ),
+        // Credits List (filtrada por estado; datos del GET pintan al instante vía provider)
+        Expanded(
+          child: creditsAsync.when(
+            data: (credits) {
+              if (credits.isEmpty) {
+                return Center(
+                  child: Text(
+                    'No hay créditos disponibles',
+                    style: TextStyle(color: AppColors.textSecondary(context)),
+                  ),
+                );
+              }
 
-    final now = DateTime.now();
-    final startDate = credit.createdAt;
-    final endDate = startDate.add(Duration(days: credit.totalInstallments));
+              // Precargar datos si aún no se han precargado
+              if (_preloadedData == null && !_isPreloading) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _preloadData(credits);
+                });
+              }
 
-    // Si la fecha actual es después de la fecha final, no hay más cuotas pendientes
-    if (now.isAfter(endDate)) {
-      // Si aún tiene saldo pendiente después de la fecha final, todas las cuotas restantes están atrasadas
-      final expectedPaidInstallments = credit.totalInstallments;
-      final actualPaidInstallments = credit.paidInstallments;
-      return expectedPaidInstallments - actualPaidInstallments;
-    }
+              if (_preloadedData == null || _isPreloading) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Actualizando cartera...',
+                        style: TextStyle(
+                          color: AppColors.textSecondary(context),
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
 
-    // Si no tiene abonos, calcular desde la primera cuota que debería haberse pagado
-    if (collections.isEmpty) {
-      // La primera cuota debería pagarse al día siguiente de la fecha de inicio
-      final firstDueDate = startDate.add(const Duration(days: 1));
+              // Usar créditos ordenados si la optimización está activada
+              final creditsToShow = _isOptimized && _sortedCredits.isNotEmpty
+                  ? _sortedCredits
+                  : credits;
 
-      // Si ya pasó la fecha de la primera cuota, calcular cuántas cuotas están atrasadas
-      if (now.isAfter(firstDueDate)) {
-        final daysOverdue = now.difference(firstDueDate).inDays;
-        // Cada día es una cuota, así que los días de atraso son las cuotas atrasadas
-        // Pero no puede exceder el total de cuotas
-        return daysOverdue > credit.totalInstallments
-            ? credit.totalInstallments
-            : daysOverdue;
-      }
-      return 0;
-    }
+              return Consumer(
+                builder: (context, ref, _) {
+                  // Sin filtro seleccionado: mostrar solo los que no han tenido ninguna acción (pendientes)
+                  final filter = _walletFilter ?? WalletFilter.pendiente;
 
-    // Si tiene abonos, calcular basándose en el último abono
-    // Ordenar abonos por fecha (más reciente primero)
-    final sortedCollections = List<CollectionEntity>.from(collections)
-      ..sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+                  // Limpiar créditos con acción cuando cambia el día para que la card pueda aparecer de nuevo en Pendiente
+                  final today = DateTime(DateTime.now().year,
+                      DateTime.now().month, DateTime.now().day);
+                  if (_lastActionDay != null &&
+                      _lastActionDay!.isBefore(today)) {
+                    ref.read(creditsWithActionTodayProvider.notifier).state =
+                        <String>{};
+                    if (mounted) setState(() => _lastActionDay = today);
+                  } else if (_lastActionDay == null) {
+                    _lastActionDay = today;
+                  }
 
-    final lastPaymentDate = sortedCollections.first.paymentDate;
+                  final creditsWithActionToday =
+                      ref.watch(creditsWithActionTodayProvider);
 
-    // Calcular cuántos días han pasado desde el último abono
-    final daysSinceLastPayment = now.difference(lastPaymentDate).inDays;
+                  // Una sola pasada: por cada crédito obtenemos datos, categoría y decidimos si mostrar
+                  // No enlistar en recaudo los créditos creados hoy; solo se ven en Ventas hasta el día siguiente
+                  final seenIds = <String>{};
+                  final filteredCredits = <CreditEntity>[];
+                  for (final credit in creditsToShow) {
+                    if (seenIds.contains(credit.id)) continue;
+                    seenIds.add(credit.id);
 
-    // Si han pasado más de 1 día desde el último abono, hay cuotas atrasadas
-    // Cada día después del último abono es una cuota atrasada
-    if (daysSinceLastPayment > 1) {
-      // No puede exceder las cuotas restantes
-      final remainingInstallments =
-          credit.totalInstallments - credit.paidInstallments;
-      final overdue = daysSinceLastPayment - 1;
-      return overdue > remainingInstallments ? remainingInstallments : overdue;
-    }
+                    final createdLocal = credit.createdAt.toLocal();
+                    final createdDay = DateTime(createdLocal.year,
+                        createdLocal.month, createdLocal.day);
 
-    // Si el último abono fue hoy o ayer, no hay cuotas atrasadas
-    return 0;
+                    // Si es de hoy, no se cobra hoy.
+                    // Se enlista en Ventas y pasa a Recaudo mañana.
+                    if (createdDay == today) continue;
+
+                    final cacheKey = '${credit.id}_${credit.clientId}';
+                    final cache =
+                        _preloadedData?[cacheKey] ?? _dataCache[cacheKey];
+
+                    // Validar si ya está pagado (saldo <= 0)
+                    double currentBalance = credit.totalBalance;
+                    if (cache != null && cache['summary'] != null) {
+                      final summary = cache['summary'] as CreditSummaryEntity;
+                      currentBalance = summary.totalBalance;
+                    }
+
+                    if (currentBalance <= 0) continue;
+
+                    final hasPaymentToday = cache != null
+                        ? (cache['hasPaymentToday'] as bool? ?? false)
+                        : false;
+                    final attempts = ref
+                        .watch(paymentAttemptsByCreditIdProvider(credit.id))
+                        .valueOrNull;
+                    final hasNoPagoToday = _hasNoPagoToday(attempts ?? []);
+
+                    final category = _category(hasPaymentToday, hasNoPagoToday);
+                    final hadActionToday =
+                        creditsWithActionToday.contains(credit.id);
+
+                    if (_shouldShowCredit(filter, category, hadActionToday)) {
+                      filteredCredits.add(credit);
+                    }
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: filteredCredits.length,
+                    cacheExtent: 1000,
+                    addAutomaticKeepAlives: false,
+                    addRepaintBoundaries: true,
+                    physics: const BouncingScrollPhysics(),
+                    itemBuilder: (context, index) {
+                      final credit = filteredCredits[index];
+                      return _buildCreditCardWithProvider(credit);
+                    },
+                  );
+                },
+              );
+            },
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, stack) => Center(
+              child: Text(
+                'Error: ${error.toString()}',
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
-  // Versión optimizada que usa datos precargados
-  Widget _buildCreditCardOptimized(credit) {
+  /// Pestaña Ventas: clientes nuevos creados hoy (no se pierden en la lista de recaudo).
+  Widget _buildVentasTab(BuildContext context) {
+    final clientsAsync = ref.watch(clientsCreatedTodayProvider);
+    return clientsAsync.when(
+      data: (clients) {
+        if (clients.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'No hay clientes nuevos creados hoy',
+                style: TextStyle(
+                  color: AppColors.textSecondary(context),
+                  fontSize: 16,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+        return Consumer(
+          builder: (context, ref, _) {
+            final creditsAsync = ref.watch(creditsProvider);
+            final credits = creditsAsync.valueOrNull ?? [];
+            final creditByClientId = {for (var c in credits) c.clientId: c};
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: clients.length,
+              itemBuilder: (context, index) {
+                final client = clients[index];
+                final credit = creditByClientId[client.id];
+                return _buildVentaCard(context, client, credit);
+              },
+            );
+          },
+        );
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (err, _) => Center(
+        child: Text(
+          'Error al cargar ventas',
+          style: TextStyle(color: AppColors.error, fontSize: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVentaCard(
+      BuildContext context, ClientEntity client, CreditEntity? credit) {
+    return InkWell(
+      onTap: () => context.push('/client-visit/${client.id}'),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.surface(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: AppColors.primary.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: AppColors.primary.withOpacity(0.2),
+              child: Icon(Icons.person, color: AppColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    client.name,
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (client.phone.isNotEmpty)
+                    Text(
+                      client.phone,
+                      style: TextStyle(
+                        color: AppColors.textSecondary(context),
+                        fontSize: 13,
+                      ),
+                    ),
+                  Text(
+                    'Creado ${DateFormat('dd/MM/yyyy HH:mm').format(client.createdAt.toLocal())}',
+                    style: TextStyle(
+                      color: AppColors.textSecondary(context),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (credit != null)
+              Text(
+                NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                    .format(credit.totalAmount),
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            const SizedBox(width: 8),
+            Icon(Icons.chevron_right, color: AppColors.textSecondary(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Tarjeta que usa provider para los días (pinta al instante al invalidar).
+  Widget _buildCreditCardWithProvider(credit) {
     final cacheKey = '${credit.id}_${credit.clientId}';
     final cachedData = _preloadedData?[cacheKey] ?? _dataCache[cacheKey];
 
-    // Si no hay datos precargados, usar la versión con FutureBuilder
     if (cachedData == null) {
       return _buildCreditCard(credit);
     }
@@ -394,7 +724,37 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     final collections = cachedData['collections'] as List<CollectionEntity>;
     final summary = cachedData['summary'] as CreditSummaryEntity?;
 
-    return _buildCreditCardContent(credit, client, collections, summary);
+    return Consumer(
+      builder: (context, ref, _) {
+        final attemptsAsync =
+            ref.watch(paymentAttemptsByCreditIdProvider(credit.id));
+        final noPaymentDays = attemptsAsync.valueOrNull != null
+            ? _daysFromPaymentAttempts(attemptsAsync.value!)
+            : (cachedData['noPaymentDays'] as int?) ?? 0;
+        return _buildCreditCardContent(
+          credit,
+          client,
+          collections,
+          summary,
+          noPaymentDays,
+          () => _navigateToClientVisit(client),
+        );
+      },
+    );
+  }
+
+  void _navigateToClientVisit(ClientEntity? client) {
+    if (client == null) return;
+    context.push('/client-visit/${client.id}').then((_) {
+      if (mounted) {
+        ref.invalidate(creditsProvider);
+        ref.invalidate(paymentAttemptsByCreditIdProvider);
+        setState(() {
+          _dataCache.clear();
+          _preloadedData = null;
+        });
+      }
+    });
   }
 
   Widget _buildCreditCard(credit) {
@@ -404,12 +764,14 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
 
     final businessId = ref.read(currentUserProvider)?.businessId;
     final creditRepository = ref.read(creditRepositoryProvider);
+    final paymentAttemptRepo = ref.read(paymentAttemptRepositoryProvider);
     return FutureBuilder<List<dynamic>>(
       future: cachedData != null
           ? Future.value([
               cachedData['client'],
               cachedData['collections'],
               cachedData['summary'],
+              cachedData['noPaymentDays'] ?? 0,
             ])
           : Future.wait<dynamic>([
               ref.read(clientRepositoryProvider).getClientById(credit.clientId),
@@ -418,6 +780,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                     businessId: businessId,
                   ),
               creditRepository.getCreditSummaryById(credit.id),
+              paymentAttemptRepo.getPaymentAttemptsByCreditId(credit.id),
             ]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
@@ -426,10 +789,10 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
             height: 400, // Altura fija para evitar distorsión
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: AppColors.surface(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppColors.textSecondary.withOpacity(0.1),
+                color: AppColors.textSecondary(context).withOpacity(0.1),
                 width: 1,
               ),
             ),
@@ -442,20 +805,36 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
         final results = snapshot.data!;
         final client = results[0] as ClientEntity?;
         final collections = results[1] as List<CollectionEntity>;
-        final summary = results.length > 2
-            ? results[2] as CreditSummaryEntity?
-            : null;
+        final summary =
+            results.length > 2 ? results[2] as CreditSummaryEntity? : null;
+        int noPaymentDays = 0;
+        if (results.length > 3) {
+          if (results[3] is int) {
+            noPaymentDays = results[3] as int;
+          } else if (results[3] is List<PaymentAttemptEntity>) {
+            noPaymentDays = _daysFromPaymentAttempts(
+                results[3] as List<PaymentAttemptEntity>);
+          }
+        }
 
         // Guardar en cache si no estaba
         if (cachedData == null && snapshot.hasData) {
+          final attemptsForCache =
+              results.length > 3 && results[3] is List<PaymentAttemptEntity>
+                  ? results[3] as List<PaymentAttemptEntity>
+                  : <PaymentAttemptEntity>[];
           _dataCache[cacheKey] = {
             'client': client,
             'collections': collections,
             'summary': summary,
+            'noPaymentDays': noPaymentDays,
+            'hasPaymentToday': _hasPaymentToday(collections),
+            'hasNoPagoToday': _hasNoPagoToday(attemptsForCache),
           };
         }
 
-        return _buildCreditCardContent(credit, client, collections, summary);
+        return _buildCreditCardContent(
+            credit, client, collections, summary, noPaymentDays);
       },
     );
   }
@@ -465,6 +844,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     ClientEntity? client,
     List<CollectionEntity> collections, [
     CreditSummaryEntity? summary,
+    int noPaymentDays = 0,
+    void Function()? onVisitTap,
   ]) {
     final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
     final dateFormatter = DateFormat('dd/MM/yyyy');
@@ -490,10 +871,11 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     final startDate = credit.createdAt;
     final endDate = startDate.add(Duration(days: credit.totalInstallments));
 
-    // Calcular cuotas atrasadas (usar saldo efectivo para considerar crédito pagado)
-    final calculatedOverdueInstallments = effectiveBalance <= 0
-        ? 0
-        : _calculateOverdueInstallments(credit, collections);
+    // Cuotas atrasadas: usar el mayor entre el valor del API (overdueInstallments)
+    // y los días acumulados sin pago (noPaymentDays de payment-attempts).
+    final displayDays = noPaymentDays > 0
+        ? noPaymentDays
+        : credit.overdueInstallments;
 
     // Ordenar por fecha de pago (más reciente primero) para mostrar siempre el último abono real
     final sortedByDate = List<CollectionEntity>.from(collections)
@@ -504,7 +886,9 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     return RepaintBoundary(
       child: InkWell(
         onTap: () {
-          if (client != null) {
+          if (onVisitTap != null) {
+            onVisitTap();
+          } else if (client != null) {
             context.push('/client-visit/${client.id}');
           }
         },
@@ -513,10 +897,10 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppColors.textSecondary.withOpacity(0.1),
+              color: AppColors.textSecondary(context).withOpacity(0.1),
               width: 1,
             ),
           ),
@@ -530,8 +914,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   Expanded(
                     child: Text(
                       clientName,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: AppColors.textPrimary(context),
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -628,7 +1012,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               // Divider
               Container(
                 height: 1,
-                color: AppColors.textSecondary.withOpacity(0.2),
+                color: AppColors.textSecondary(context).withOpacity(0.2),
               ),
               const SizedBox(height: 20),
               // Fechas del préstamo
@@ -639,18 +1023,18 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.startDate,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondary(context),
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           dateFormatter.format(startDate),
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -663,10 +1047,10 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.endDate,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondary(context),
                             fontSize: 12,
                           ),
                           textAlign: TextAlign.right,
@@ -674,8 +1058,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                         const SizedBox(height: 4),
                         Text(
                           dateFormatter.format(endDate),
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -690,7 +1074,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               // Divider
               Container(
                 height: 1,
-                color: AppColors.textSecondary.withOpacity(0.2),
+                color: AppColors.textSecondary(context).withOpacity(0.2),
               ),
               const SizedBox(height: 20),
               // Saldo Total del Préstamo y Saldo Restante
@@ -701,18 +1085,18 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.totalLoanAmount,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondary(context),
                             fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           formatter.format(credit.totalToPay),
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -725,10 +1109,10 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.remainingBalance,
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondary(context),
                             fontSize: 12,
                           ),
                           textAlign: TextAlign.right,
@@ -753,10 +1137,10 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               const SizedBox(height: 20),
               // Últimos Abonos
               if (lastCollections.isNotEmpty) ...[
-                const Text(
+                Text(
                   AppStrings.lastPayments,
                   style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimary(context),
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -769,8 +1153,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                         children: [
                           Text(
                             dateFormatter.format(collection.paymentDate),
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: AppColors.textSecondary(context),
                               fontSize: 12,
                             ),
                           ),
@@ -797,17 +1181,16 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   ),
                   _buildInfoColumn(
                     AppStrings.overdueInstallmentsLabel,
-                    calculatedOverdueInstallments.toString(),
-                    valueColor: calculatedOverdueInstallments > 0
-                        ? AppColors.error
-                        : AppColors.success,
+                    displayDays.toString(),
+                    valueColor:
+                        displayDays > 0 ? AppColors.error : AppColors.success,
                   ),
                   _buildInfoColumn(
                     AppStrings.lastPaymentLabel,
                     lastPayment != null
                         ? dateFormatter.format(lastPayment.paymentDate)
                         : 'N/A',
-                    valueColor: AppColors.textSecondary,
+                    valueColor: AppColors.textSecondary(context),
                   ),
                 ],
               ),
@@ -824,8 +1207,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
+          style: TextStyle(
+            color: AppColors.textSecondary(context),
             fontSize: 12,
           ),
           textAlign: TextAlign.center,
@@ -834,7 +1217,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
         Text(
           value,
           style: TextStyle(
-            color: valueColor ?? AppColors.textPrimary,
+            color: valueColor ?? AppColors.textPrimary(context),
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),

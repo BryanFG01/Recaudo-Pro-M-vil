@@ -14,12 +14,14 @@ class WithdrawalModel extends WithdrawalEntity {
 
   factory WithdrawalModel.fromJson(Map<String, dynamic> json) {
     return WithdrawalModel(
-      id: json['id'] as String,
-      cashSessionId: (json['cash_session_id'] ?? json['cashSessionId'] ?? '').toString(),
+      id: (json['id'] ?? json['_id'] ?? json['withdrawal_id'] ?? '').toString(),
+      cashSessionId:
+          (json['cash_session_id'] ?? json['cashSessionId'] ?? '').toString(),
       userId: (json['user_id'] ?? json['userId'] ?? '').toString(),
       amount: _num(json['amount']),
       reason: json['reason'] as String? ?? '',
-      isApproved: json['is_approved'] as bool? ?? json['isApproved'] as bool? ?? false,
+      isApproved:
+          json['is_approved'] as bool? ?? json['isApproved'] as bool? ?? false,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : json['createdAt'] != null

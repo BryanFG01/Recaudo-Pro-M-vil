@@ -15,8 +15,8 @@ abstract class CollectionRepository {
     String creditId, {
     String? businessId,
   });
-  Future<CollectionEntity> createCollection(
-      CollectionEntity collection, {String? businessId});
+  Future<CollectionEntity> createCollection(CollectionEntity collection,
+      {String? businessId});
   Future<DashboardStatsEntity> getDashboardStats({
     required String businessId,
     DateTime? startDate,
@@ -27,5 +27,5 @@ abstract class CollectionRepository {
   Future<List<Map<String, dynamic>>> getWeeklyCollection({
     String? businessId,
   });
+  Future<void> deleteCollection(String id);
 }
-

@@ -18,6 +18,8 @@ class PrintPreviewDialog extends StatelessWidget {
   final double? pendingPaymentAmount;
   final String? paymentMethod;
   final bool isFullPayment;
+  /// En Visita Cliente no se muestra "Cuotas Atrasadas"; en otras vistas puede mostrarse.
+  final bool showOverdueInstallments;
 
   const PrintPreviewDialog({
     super.key,
@@ -27,6 +29,7 @@ class PrintPreviewDialog extends StatelessWidget {
     this.pendingPaymentAmount,
     this.paymentMethod,
     this.isFullPayment = false,
+    this.showOverdueInstallments = true,
   });
 
   Future<Uint8List> _generatePdf() async {
@@ -152,7 +155,7 @@ class PrintPreviewDialog extends StatelessWidget {
                   ),
                 ],
               ),
-              if (isOverdue) ...[
+              if (showOverdueInstallments && isOverdue) ...[
                 pw.SizedBox(height: 2),
                 pw.Text(
                   'Cuotas Atrasadas: ${credit.overdueInstallments}',
@@ -403,7 +406,7 @@ class PrintPreviewDialog extends StatelessWidget {
                 ),
               ],
             ),
-            if (isOverdue) ...[
+            if (showOverdueInstallments && isOverdue) ...[
               const SizedBox(height: 2),
               Text(
                 'Cuotas Atrasadas: ${credit.overdueInstallments}',
@@ -528,17 +531,17 @@ class PrintPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.surface(context),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
         height: MediaQuery.of(context).size.height * 0.8,
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text(
+            Text(
               'Previsualización de Impresión',
               style: TextStyle(
-                color: AppColors.textPrimary,
+                color: AppColors.textPrimary(context),
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),

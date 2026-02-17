@@ -29,8 +29,8 @@ class BusinessRemoteDataSourceImpl implements BusinessRemoteDataSource {
 
   @override
   Future<List<BusinessEntity>> searchBusinesses(String query) async {
-    final url = ApiConfig.buildApiUrlWithQuery(
-        '/api/businesses', {'search': query});
+    final url =
+        ApiConfig.buildApiUrlWithQuery('/api/businesses', {'search': query});
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception('Error al buscar negocios: ${response.statusCode}');
@@ -43,8 +43,8 @@ class BusinessRemoteDataSourceImpl implements BusinessRemoteDataSource {
 
   @override
   Future<BusinessEntity?> getBusinessByCode(String code) async {
-    final url = ApiConfig.buildApiUrlWithQuery(
-        '/api/businesses', {'code': code});
+    final url =
+        ApiConfig.buildApiUrlWithQuery('/api/businesses', {'code': code});
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) return null;
     final body = response.body;
@@ -64,6 +64,9 @@ class BusinessRemoteDataSourceImpl implements BusinessRemoteDataSource {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) return null;
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return BusinessModel.fromJson(data);
+    final raw = data['data'] is Map<String, dynamic>
+        ? data['data'] as Map<String, dynamic>
+        : data;
+    return BusinessModel.fromJson(raw);
   }
 }

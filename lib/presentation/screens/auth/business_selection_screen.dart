@@ -51,7 +51,7 @@ class _BusinessSelectionScreenState
     final businessesAsync = ref.watch(businessesProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -59,9 +59,9 @@ class _BusinessSelectionScreenState
             Align(
               alignment: Alignment.topRight,
               child: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.help_outline,
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondary(context),
                 ),
                 onPressed: () {
                   // TODO: Mostrar ayuda
@@ -90,10 +90,10 @@ class _BusinessSelectionScreenState
                     ),
                     const SizedBox(height: 24),
                     // App Name
-                    const Text(
+                    Text(
                       'RecaudoPro',
                       style: TextStyle(
-                        color: AppColors.textPrimary,
+                        color: AppColors.textPrimary(context),
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                       ),
@@ -104,8 +104,8 @@ class _BusinessSelectionScreenState
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
                         AppStrings.searchBusinessByNameOrNumber,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
                           fontSize: 16,
                         ),
                         textAlign: TextAlign.center,
@@ -117,15 +117,15 @@ class _BusinessSelectionScreenState
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: AppColors.textPrimary),
+                        style: TextStyle(color: AppColors.textPrimary(context)),
                         decoration: InputDecoration(
                           hintText: AppStrings.searchBusiness,
                           hintStyle:
-                              const TextStyle(color: AppColors.textSecondary),
-                          prefixIcon: const Icon(Icons.search,
-                              color: AppColors.textSecondary),
+                              TextStyle(color: AppColors.textSecondary(context)),
+                          prefixIcon: Icon(Icons.search,
+                              color: AppColors.textSecondary(context)),
                           filled: true,
-                          fillColor: AppColors.surface,
+                          fillColor: AppColors.surface(context),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
                             borderSide: BorderSide.none,
@@ -147,11 +147,11 @@ class _BusinessSelectionScreenState
                           }
 
                           if (businesses.isEmpty) {
-                            return const Center(
+                            return Center(
                               child: Text(
                                 'No se encontraron negocios',
                                 style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.textSecondary(context),
                                 ),
                               ),
                             );
@@ -169,11 +169,11 @@ class _BusinessSelectionScreenState
                           }).toList();
 
                           if (filteredBusinesses.isEmpty) {
-                            return const Center(
+                            return Center(
                               child: Text(
                                 'No se encontraron negocios',
                                 style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.textSecondary(context),
                                 ),
                               ),
                             );
@@ -199,12 +199,12 @@ class _BusinessSelectionScreenState
                                   decoration: BoxDecoration(
                                     color: isSelected
                                         ? AppColors.primary
-                                        : AppColors.surface,
+                                        : AppColors.surface(context),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: isSelected
                                           ? AppColors.primary
-                                          : AppColors.textSecondary
+                                          : AppColors.textSecondary(context)
                                               .withOpacity(0.2),
                                       width: isSelected ? 2 : 1,
                                     ),
@@ -245,7 +245,7 @@ class _BusinessSelectionScreenState
                                               style: TextStyle(
                                                 color: isSelected
                                                     ? Colors.white
-                                                    : AppColors.textPrimary,
+                                                    : AppColors.textPrimary(context),
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.bold,
                                               ),
@@ -256,7 +256,7 @@ class _BusinessSelectionScreenState
                                                 style: TextStyle(
                                                   color: isSelected
                                                       ? Colors.white70
-                                                      : AppColors.textSecondary,
+                                                      : AppColors.textSecondary(context),
                                                   fontSize: 12,
                                                 ),
                                                 maxLines: 1,

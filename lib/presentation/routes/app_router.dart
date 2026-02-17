@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import '../screens/auth/business_selection_screen.dart';
 import '../screens/auth/game_intro_screen.dart';
 import '../screens/auth/login_screen.dart';
-import '../screens/cash_session/cash_session_screen.dart';
 import '../screens/clients/clients_list_screen.dart';
 import '../screens/clients/new_client_screen.dart';
 import '../screens/collections/client_visit_screen.dart';
@@ -12,6 +11,10 @@ import '../screens/credits/credit_list_screen.dart';
 import '../screens/credits/my_wallet_screen.dart';
 import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/dashboard/statistics_dashboard_screen.dart';
+import '../screens/reports/expenses_report_screen.dart';
+import '../screens/reports/expenses_screen.dart';
+import '../screens/cash_session/cash_session_screen.dart';
+import '../screens/reports/withdrawals_report_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -43,6 +46,21 @@ class AppRouter {
         builder: (context, state) => const StatisticsDashboardScreen(),
       ),
       GoRoute(
+        path: '/report-withdrawals',
+        name: 'report-withdrawals',
+        builder: (context, state) => const WithdrawalsReportScreen(),
+      ),
+      GoRoute(
+        path: '/expenses',
+        name: 'expenses',
+        builder: (context, state) => const ExpensesScreen(),
+      ),
+      GoRoute(
+        path: '/report-expenses',
+        name: 'report-expenses',
+        builder: (context, state) => const ExpensesReportScreen(),
+      ),
+      GoRoute(
         path: '/credits',
         name: 'credits',
         builder: (context, state) => const CreditListScreen(),
@@ -63,7 +81,27 @@ class AppRouter {
       GoRoute(
         path: '/new-client',
         name: 'new-client',
-        builder: (context, state) => const NewClientScreen(),
+        builder: (context, state) {
+          final isRenovation =
+              state.uri.queryParameters['renovation'] == 'true';
+          return NewClientScreen(
+            clientId: null,
+            isRenovation: isRenovation,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/new-client/:clientId',
+        name: 'new-client-edit',
+        builder: (context, state) {
+          final clientId = state.pathParameters['clientId'];
+          final isRenovation =
+              state.uri.queryParameters['renovation'] == 'true';
+          return NewClientScreen(
+            clientId: clientId,
+            isRenovation: isRenovation,
+          );
+        },
       ),
       GoRoute(
         path: '/clients',

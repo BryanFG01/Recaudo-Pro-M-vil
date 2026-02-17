@@ -1,5 +1,7 @@
 import '../../domain/entities/cash_session_entity.dart';
 import '../../domain/entities/cash_session_flow_entity.dart';
+import '../../domain/entities/daily_summary_by_user_entity.dart';
+import '../../domain/entities/daily_summary_entity.dart';
 import '../../domain/entities/withdrawal_entity.dart';
 import '../../domain/entities/withdrawals_data_entity.dart';
 import '../../domain/repositories/cash_session_repository.dart';
@@ -50,5 +52,31 @@ class CashSessionRepositoryImpl implements CashSessionRepository {
   @override
   Future<WithdrawalsDataEntity> getWithdrawalsByUser(String userId) {
     return remoteDataSource.getWithdrawalsByUser(userId);
+  }
+
+  @override
+  Future<DailySummaryEntity?> getDailySummary(String sessionId) {
+    return remoteDataSource.getDailySummary(sessionId);
+  }
+
+  @override
+  Future<DailySummaryByUserEntity> getDailySummaryByUserId(String userId) {
+    return remoteDataSource.getDailySummaryByUserId(userId);
+  }
+
+  @override
+  Future<List<WithdrawalEntity>> getWithdrawalsBySession({
+    required String cashSessionId,
+    required String userId,
+  }) {
+    return remoteDataSource.getWithdrawalsBySession(
+      cashSessionId: cashSessionId,
+      userId: userId,
+    );
+  }
+
+  @override
+  Future<List<CashSessionEntity>> getAllCashSessionsByUserId(String userId) {
+    return remoteDataSource.getAllCashSessionsByUserId(userId);
   }
 }

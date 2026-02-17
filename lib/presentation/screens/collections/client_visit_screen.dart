@@ -13,11 +13,14 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/utils/business_helper.dart';
+import '../../../core/utils/thousands_separator_input_formatter.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/business_provider.dart';
 import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
+import '../../providers/payment_attempt_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/print_preview_dialog.dart';
@@ -40,6 +43,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
   bool _isLoadingPayment = false; // Estado de carga para "Realizar Abono"
   bool _isLoadingFullPayment =
       false; // Estado de carga para "Pagar Cuota Completa"
+  bool _isLoadingNoPago = false;
   String? _creditId;
   int _refreshKey = 0;
   bool _isRefreshing = false;
@@ -254,6 +258,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
             pendingPaymentAmount: pendingAmount,
             paymentMethod: paymentMethod,
             isFullPayment: isFullPayment,
+            showOverdueInstallments: false,
           ),
         );
       }
@@ -361,18 +366,19 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       }
 
       // Para cuota completa, usar el monto de la cuota diaria
-      // Remover comas del texto antes de convertir a número
-      final amountText = _amountController.text.replaceAll(',', '');
       final amount = isFullPayment
           ? credit.installmentAmount
-          : double.tryParse(amountText) ?? 0;
+          : ThousandsSeparatorInputFormatter.parse(
+                  _amountController.text.trim()) ??
+              0;
 
       if (amount <= 0) {
         throw Exception('El monto debe ser mayor a cero');
       }
 
       // Saldo restante desde summary (API) o crédito
-      final effectiveBalance = _creditSummary?.totalBalance ?? credit.totalBalance;
+      final effectiveBalance =
+          _creditSummary?.totalBalance ?? credit.totalBalance;
       if (amount > effectiveBalance) {
         throw Exception('El monto excede el saldo restante del préstamo');
       }
@@ -384,7 +390,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       }
 
       // Calcular el nuevo saldo usando el balance del summary (o del crédito)
-      final currentBalance = _creditSummary?.totalBalance ?? currentCredit.totalBalance;
+      final currentBalance =
+          _creditSummary?.totalBalance ?? currentCredit.totalBalance;
       final newTotalBalance = currentBalance - amount;
 
       final createCollectionUseCase = ref.read(createCollectionUseCaseProvider);
@@ -439,6 +446,13 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         ref.invalidate(cashSessionByUserProvider);
         ref.invalidate(activeCashSessionProvider);
 
+        // Marcar crédito con acción hoy: en Mi cartera la card se esconde y reaparece al filtrar (Pagaron/No pagaron) o al otro día
+        final set = ref.read(creditsWithActionTodayProvider);
+        ref.read(creditsWithActionTodayProvider.notifier).state = {
+          ...set,
+          _creditId!
+        };
+
         // Refrescar la vista para mostrar el nuevo recaudo y el saldo actualizado
         if (mounted) {
           setState(() {
@@ -476,29 +490,143 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
     }
   }
 
+  /// Registra intento "No pago" (POST /api/payment-attempts con status NOT_PAID).
+  Future<void> _handleNoPago() async {
+    setState(() => _isLoadingNoPago = true);
+    try {
+      final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
+      final currentUser = ref.read(currentUserProvider);
+      final selectedBusiness = ref.read(selectedBusinessProvider);
+      if (currentUser == null) throw Exception('Usuario no autenticado');
+      if (_creditId == null) throw Exception('No hay crédito seleccionado');
+
+      final repo = ref.read(paymentAttemptRepositoryProvider);
+
+      // Verificar si hay un recaudo hoy y borrarlo (corrección de error)
+      final collectionRepo = ref.read(collectionRepositoryProvider);
+      final collections = await collectionRepo.getCollectionsByCreditId(
+        _creditId!,
+        businessId: businessId,
+      );
+
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+
+      // Buscar recaudos de hoy
+      final todaysCollections = collections.where((c) {
+        final d = c.paymentDate.toLocal();
+        return d.year == today.year &&
+            d.month == today.month &&
+            d.day == today.day;
+      }).toList();
+
+      // Si hay recaudos hoy, borrar el más reciente
+      if (todaysCollections.isNotEmpty) {
+        // Ordenar por fecha descendente (si no están ordenados)
+        todaysCollections
+            .sort((a, b) => b.paymentDate.compareTo(a.paymentDate));
+        final lastCollection = todaysCollections.first;
+
+        await collectionRepo.deleteCollection(lastCollection.id);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Pago anterior eliminado (corrección)'),
+              backgroundColor: AppColors.warning,
+            ),
+          );
+        }
+
+        // Invalidar providers relevantes
+        ref.invalidate(creditsProvider);
+        ref.invalidate(dashboardStatsProvider);
+        ref.invalidate(recentCollectionsProvider);
+        ref.invalidate(cashSessionFlowProvider);
+        ref.invalidate(withdrawalsByUserProvider);
+        ref.invalidate(cashSessionByUserProvider);
+        ref.invalidate(activeCashSessionProvider);
+      }
+
+      // Obtener intentos previos para calcular accumulated_no_payment_days
+      final previousAttempts =
+          await repo.getPaymentAttemptsByCreditId(_creditId!);
+      final notPaidAttempts = previousAttempts
+          .where((a) => a.status == 'NOT_PAID')
+          .toList();
+      // Siempre usar la cantidad de NOT_PAID + 1 para el nuevo intento (1º no pago → 1, 2º → 2, etc.),
+      // así el backend recibe siempre el valor aunque a veces no lo devuelva en el GET
+      final int accumulatedNoPaymentDays = notPaidAttempts.length + 1;
+
+      await repo.createPaymentAttempt(
+        creditId: _creditId!,
+        clientId: widget.clientId,
+        status: 'NOT_PAID',
+        userId: currentUser.id,
+        businessId: businessId,
+        businessCode: selectedBusiness?.code,
+        attemptDate: DateTime.now(),
+        accumulatedNoPaymentDays: accumulatedNoPaymentDays,
+        notes: 'No pago - visita cliente',
+      );
+
+      ref.invalidate(paymentAttemptsProvider);
+      ref.invalidate(paymentAttemptsByCreditIdProvider(_creditId!));
+      // Invalidar toda la familia para que en Mi cartera todas las tarjetas refresquen cuotas atrasadas
+      ref.invalidate(paymentAttemptsByCreditIdProvider);
+
+      // Marcar crédito con acción hoy: en Mi cartera la card se esconde y reaparece al filtrar (Pagaron/No pagaron) o al otro día
+      final set = ref.read(creditsWithActionTodayProvider);
+      ref.read(creditsWithActionTodayProvider.notifier).state = {
+        ...set,
+        _creditId!
+      };
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No pago registrado'),
+            backgroundColor: AppColors.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingNoPago = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
+        title: Text(
           'Visita Cliente y Recaudo',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.textPrimary(context),
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
-            icon:
-                const Icon(Icons.print_outlined, color: AppColors.textPrimary),
+            icon: Icon(Icons.print_outlined,
+                color: AppColors.textPrimary(context)),
             onPressed: () => _showPrintPreview(context),
           ),
         ],
@@ -598,8 +726,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     // Client Name (Large)
                     Text(
                       client.name,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: AppColors.textPrimary(context),
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
@@ -609,8 +737,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     if (client.documentId != null)
                       Text(
                         'ID: ${client.documentId!}',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: AppColors.textSecondary(context),
                           fontSize: 14,
                         ),
                       ),
@@ -618,8 +746,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       const SizedBox(height: 4),
                       Text(
                         client.address!,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: AppColors.textSecondary(context),
                           fontSize: 14,
                         ),
                       ),
@@ -671,12 +799,11 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     // Financial Information Boxes
                     Row(
                       children: [
-                        // Remaining Loan Amount
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
+                              color: AppColors.surface(context),
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: Column(
@@ -684,16 +811,16 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                               children: [
                                 Text(
                                   AppStrings.remainingLoanAmount,
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary(context),
                                     fontSize: 12,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   formatter.format(effectiveBalance),
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary(context),
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -701,8 +828,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                 const SizedBox(height: 4),
                                 Text(
                                   '${AppStrings.total}: ${formatter.format(credit.totalToPay)}',
-                                  style: const TextStyle(
-                                    color: AppColors.textSecondary,
+                                  style: TextStyle(
+                                    color: AppColors.textSecondary(context),
                                     fontSize: 11,
                                   ),
                                 ),
@@ -711,7 +838,6 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        // Installment Amount
                         Expanded(
                           child: Container(
                             padding: const EdgeInsets.all(16),
@@ -746,10 +872,10 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     ),
                     const SizedBox(height: 24),
                     // Register Payment Section
-                    const Text(
+                    Text(
                       AppStrings.registerPayment,
                       style: TextStyle(
-                        color: AppColors.textPrimary,
+                        color: AppColors.textPrimary(context),
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -759,19 +885,20 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     DropdownButtonFormField<String>(
                       value: _paymentMethod,
                       dropdownColor:
-                          AppColors.surface, // Background for the menu
-                      style: const TextStyle(
-                          color: AppColors.textPrimary), // Text color for items
+                          AppColors.surface(context), // Background for the menu
+                      style: TextStyle(
+                          color: AppColors.textPrimary(
+                              context)), // Text color for items
                       decoration: InputDecoration(
                         labelText: 'Método de Pago',
                         labelStyle:
-                            const TextStyle(color: AppColors.textSecondary),
+                            TextStyle(color: AppColors.textSecondary(context)),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: AppColors.surface,
+                        fillColor: AppColors.surface(context),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
                         enabledBorder: OutlineInputBorder(
@@ -815,8 +942,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       children: [
                         Text(
                           AppStrings.paymentAmount,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -828,15 +955,16 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
                           ],
-                          style: const TextStyle(color: AppColors.textPrimary),
+                          style:
+                              TextStyle(color: AppColors.textPrimary(context)),
                           decoration: InputDecoration(
                             hintText: AppStrings.enterSpecificAmount,
-                            hintStyle:
-                                const TextStyle(color: AppColors.textSecondary),
-                            prefixIcon: const Icon(Icons.attach_money,
-                                color: AppColors.textSecondary),
+                            hintStyle: TextStyle(
+                                color: AppColors.textSecondary(context)),
+                            prefixIcon: Icon(Icons.attach_money,
+                                color: AppColors.textSecondary(context)),
                             filled: true,
-                            fillColor: AppColors.surface,
+                            fillColor: AppColors.surface(context),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
@@ -879,23 +1007,66 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           : () => _handlePayment(true),
                       backgroundColor: AppColors.success,
                     ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: (_isLoadingNoPago ||
+                                _isLoadingPayment ||
+                                _isLoadingFullPayment ||
+                                _isRefreshing)
+                            ? null
+                            : _handleNoPago,
+                        icon: _isLoadingNoPago
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : const Icon(
+                                Icons.close_rounded,
+                                size: 22,
+                                color: Colors.white,
+                              ),
+                        label: Text(
+                          'No pago',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 32),
                     // Collection History
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.collectionHistory,
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: AppColors.textPrimary(context),
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.filter_list,
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondary(context),
                           ),
                           onPressed: () {
                             // TODO: Implementar filtro
@@ -909,14 +1080,14 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       Container(
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: AppColors.surface(context),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
                             'No hay recaudos registrados',
                             style: TextStyle(
-                              color: AppColors.textSecondary,
+                              color: AppColors.textSecondary(context),
                               fontSize: 14,
                             ),
                           ),
@@ -926,15 +1097,15 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       Container(
                         height: 300, // Altura fija para habilitar scroll
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: AppColors.surface(context),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: ListView.separated(
                           physics: const BouncingScrollPhysics(),
                           itemCount: collections.length,
-                          separatorBuilder: (context, index) => const Divider(
+                          separatorBuilder: (context, index) => Divider(
                             height: 1,
-                            color: AppColors.textSecondary,
+                            color: AppColors.textSecondary(context),
                           ),
                           itemBuilder: (context, index) {
                             final collection = collections[index];
@@ -955,8 +1126,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                         Text(
                                           dateFormatter
                                               .format(collection.paymentDate),
-                                          style: const TextStyle(
-                                            color: AppColors.textPrimary,
+                                          style: TextStyle(
+                                            color:
+                                                AppColors.textPrimary(context),
                                             fontSize: 14,
                                           ),
                                         ),
@@ -965,8 +1137,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                           const SizedBox(height: 4),
                                           Text(
                                             collection.paymentMethod!,
-                                            style: const TextStyle(
-                                              color: AppColors.textSecondary,
+                                            style: TextStyle(
+                                              color: AppColors.textSecondary(
+                                                  context),
                                               fontSize: 12,
                                             ),
                                           ),
@@ -976,8 +1149,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                   ),
                                   Text(
                                     formatter.format(collection.amount),
-                                    style: const TextStyle(
-                                      color: AppColors.textPrimary,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary(context),
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
                                     ),

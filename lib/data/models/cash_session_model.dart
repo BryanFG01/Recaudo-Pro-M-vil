@@ -13,13 +13,16 @@ class CashSessionModel extends CashSessionEntity {
 
   factory CashSessionModel.fromJson(Map<String, dynamic> json) {
     return CashSessionModel(
-      id: (json['id'] ?? json['cash_session_id'] ?? '').toString(),
+      id: (json['id'] ?? json['_id'] ?? json['cash_session_id'] ?? '')
+          .toString(),
       initialBalance: _num(json['initial_balance'] ?? json['initialBalance']),
-      currentBalance: json['current_balance'] != null || json['currentBalance'] != null
-          ? _num(json['current_balance'] ?? json['currentBalance'])
-          : null,
+      currentBalance:
+          json['current_balance'] != null || json['currentBalance'] != null
+              ? _num(json['current_balance'] ?? json['currentBalance'])
+              : null,
       userId: json['user_id'] as String? ?? json['userId'] as String?,
-      businessId: json['business_id'] as String? ?? json['businessId'] as String?,
+      businessId:
+          json['business_id'] as String? ?? json['businessId'] as String?,
       openedAt: json['opened_at'] != null
           ? DateTime.parse(json['opened_at'] as String)
           : json['openedAt'] != null

@@ -29,18 +29,18 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
     final creditsAsync = ref.watch(creditsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
+        title: Text(
           AppStrings.myWallet,
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.textPrimary(context),
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -53,13 +53,13 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
             padding: const EdgeInsets.all(16),
             child: TextField(
               controller: _searchController,
-              style: const TextStyle(color: AppColors.textPrimary),
+              style: TextStyle(color: AppColors.textPrimary(context)),
               decoration: InputDecoration(
                 hintText: AppStrings.searchByNameOrId,
-                hintStyle: const TextStyle(color: AppColors.textSecondary),
-                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                hintStyle: TextStyle(color: AppColors.textSecondary(context)),
+                prefixIcon: Icon(Icons.search, color: AppColors.textSecondary(context)),
                 filled: true,
-                fillColor: AppColors.surface,
+                fillColor: AppColors.surface(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -75,10 +75,10 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
             child: creditsAsync.when(
               data: (credits) {
                 if (credits.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'No hay créditos disponibles',
-                      style: TextStyle(color: AppColors.textSecondary),
+                      style: TextStyle(color: AppColors.textSecondary(context)),
                     ),
                   );
                 }
@@ -125,7 +125,7 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: AppColors.surface(context),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
@@ -136,20 +136,20 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
                 children: [
                   Text(
                     clientName,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   Row(
                     children: [
-                      const Icon(Icons.phone, size: 16, color: AppColors.textSecondary),
+                      Icon(Icons.phone, size: 16, color: AppColors.textSecondary(context)),
                       const SizedBox(width: 4),
                       Text(
                         clientPhone,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: AppColors.textSecondary(context),
                           fontSize: 14,
                         ),
                       ),
@@ -203,8 +203,8 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
         children: [
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: AppColors.textSecondary(context),
               fontSize: 12,
             ),
           ),
@@ -216,7 +216,7 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
                   ? AppColors.primary
                   : isWarning
                       ? AppColors.warning
-                      : AppColors.textPrimary,
+                      : AppColors.textPrimary(context),
               fontSize: 16,
               fontWeight: FontWeight.bold,
             ),

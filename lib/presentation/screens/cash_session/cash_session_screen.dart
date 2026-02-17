@@ -16,6 +16,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/stat_card.dart';
@@ -158,57 +159,62 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             isActiveRoute &&
             effectiveSessionId != null &&
             effectiveSessionId.isNotEmpty
-        ? ref.watch(totalVentasPorSesionProvider(
-            (businessId: user.businessId,
-                userId: user.id,
-                sessionId: effectiveSessionId)))
+        ? ref.watch(totalVentasPorSesionProvider((
+            businessId: user.businessId,
+            userId: user.id,
+            sessionId: effectiveSessionId
+          )))
         : const AsyncValue<double>.data(0);
     final sessionAsync =
         isActiveRoute ? null : ref.watch(cashSessionProvider(widget.sessionId));
+    // Caja actual desde la misma API que Reportes (GET daily-summary/user/{userId}) para que coincida.
+    final dailySummaryAsync = user != null && isActiveRoute
+        ? ref.watch(dailySummaryByUserProvider(user.id))
+        : null;
 
     if (isActiveRoute && user == null) {
       return Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: AppColors.background(context),
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new,
-                color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_ios_new,
+                color: AppColors.textPrimary(context)),
             onPressed: () => context.pop(),
           ),
-          title: const Text(
+          title: Text(
             AppStrings.cashSession,
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.textPrimary(context),
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
         ),
-        body: const Center(
+        body: Center(
           child: Text(
             'Inicia sesión para ver la sesión de caja',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: AppColors.textSecondary(context)),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new,
-              color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_ios_new,
+              color: AppColors.textPrimary(context)),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
+        title: Text(
           AppStrings.cashSession,
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.textPrimary(context),
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
@@ -222,16 +228,18 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             if (isActiveRoute) {
               ref.invalidate(cashSessionByUserProvider(user.id));
               ref.invalidate(dashboardStatsProvider(0));
+              ref.invalidate(dailySummaryByUserProvider(user.id));
               ref.invalidate(totalRecaudoRealProvider(
                   (businessId: user.businessId, userId: user.id)));
               ref.invalidate(totalVentasHoyProvider(
                   (businessId: user.businessId, userId: user.id)));
               if (effectiveSessionId != null && effectiveSessionId.isNotEmpty) {
                 ref.invalidate(cashSessionFlowProvider(effectiveSessionId));
-                ref.invalidate(totalVentasPorSesionProvider(
-                    (businessId: user.businessId,
-                        userId: user.id,
-                        sessionId: effectiveSessionId)));
+                ref.invalidate(totalVentasPorSesionProvider((
+                  businessId: user.businessId,
+                  userId: user.id,
+                  sessionId: effectiveSessionId
+                )));
               }
             }
             ref.invalidate(withdrawalsByUserProvider(user.id));
@@ -260,6 +268,11 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                     final recaudoTotal = totalRecaudoRealAsync.valueOrNull ??
                         dashboardStatsAsync.valueOrNull?.totalCollected ??
                         0.0;
+                    final summary = dailySummaryAsync?.valueOrNull;
+                    final cajaActualFromReportes = summary?.totals.cajaActual ??
+                        (summary?.items.isNotEmpty == true
+                            ? summary!.items.first.cajaActual
+                            : null);
                     return _buildContentFromWithdrawalsData(
                       data,
                       cashSession: session,
@@ -270,6 +283,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                       totalVentasPorSesionAsync: totalVentasPorSesionAsync,
                       hasSessionId: effectiveSessionId != null &&
                           effectiveSessionId.isNotEmpty,
+                      cajaActualFromReportes: cajaActualFromReportes,
+                      cajaActualLoading: dailySummaryAsync?.isLoading ?? false,
                     );
                   },
                   loading: () => const Center(
@@ -325,10 +340,13 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           ),
         ),
       ),
+      bottomNavigationBar: isActiveRoute
+          ? const AppBottomNavigationBar(currentIndex: 1)
+          : null,
     );
   }
 
-  /// Contenido: card saldo inicial, total recaudo, ventas (lo que se presta), saldo a favor/en contra; form retiro; historial mis retiros.
+  /// Contenido: una card Caja actual (misma que Reportes), form retiro; sin historial.
   Widget _buildContentFromWithdrawalsData(
     WithdrawalsDataEntity data, {
     CashSessionEntity? cashSession,
@@ -338,6 +356,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     AsyncValue<double>? totalVentasHoyAsync,
     AsyncValue<double>? totalVentasPorSesionAsync,
     bool hasSessionId = false,
+    double? cajaActualFromReportes,
+    bool cajaActualLoading = false,
   }) {
     final flow = flowAsync.valueOrNull;
     // Caja inicial: flow.initial_balance o fallback a sesión/withdrawals.
@@ -358,76 +378,31 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         totalRecaudoRealAsync?.isLoading ?? flowAsync.isLoading;
 
     final bool canWithdraw = flow?.allowedToWithdraw ?? true;
+    _checkNewlyApprovedWithdrawals(data.withdrawals);
+
+    final totalVentas = _ventasParaMostrar(
+      flow?.totalCredits,
+      totalVentasPorSesionAsync?.valueOrNull,
+      totalVentasHoyAsync?.valueOrNull,
+      flow != null,
+    );
+    final totalRetiros = flow?.totalWithdrawalsApproved ??
+        data.withdrawals
+            .where((w) => w.isApproved)
+            .fold<double>(0, (s, w) => s + w.amount);
+    final cajaActualCalculada =
+        initialBalance - totalVentas - totalRetiros + totalRecaudoMostrado;
+    // Usar la misma caja actual que Reportes (API daily-summary) para que coincida
+    final cajaActual = cajaActualFromReportes ?? cajaActualCalculada;
+    final isLoadingCaja = cajaActualFromReportes != null
+        ? cajaActualLoading
+        : (cajaActualLoading || totalRecaudoLoading);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Card Caja inicial (desde flow o sesión)
-        StatCard(
-          title: AppStrings.initialBalance,
-          amount: initialBalance,
-          subtitle: 'Base de efectivo al iniciar sesión',
-        ),
-        const SizedBox(height: 16),
-        // Card Total recaudo (flow: total_collected − total_withdrawals_approved)
-        totalRecaudoLoading
-            ? _buildTotalRecaudoLoadingCard()
-            : StatCard(
-                title: AppStrings.totalCollected,
-                amount: totalRecaudoMostrado,
-                subtitle: flow != null
-                    ? 'Recaudo: ${NumberFormat.simpleCurrency().format(flow.totalCollected)} | Retiros: ${NumberFormat.simpleCurrency().format(flow.totalWithdrawalsApproved)}'
-                    : 'Dentro de sesión de caja',
-              ),
-        // Ventas (lo que se presta): si flow.totalCredits es 0 al actualizar caja inicial, usamos suma por sesión.
-        const SizedBox(height: 16),
-        _buildVentasCard(
-          _ventasParaMostrar(
-            flow?.totalCredits,
-            totalVentasPorSesionAsync?.valueOrNull,
-            totalVentasHoyAsync?.valueOrNull,
-            flow != null,
-          ),
-          isLoading: flow == null && (totalVentasHoyAsync?.isLoading ?? false),
-        ),
-        if (flow != null) ...[
-          const SizedBox(height: 16),
-          StatCard(
-            title: AppStrings.cajaInicialRestante,
-            amount: initialBalance -
-                flow.totalWithdrawalsApproved -
-                _ventasParaMostrar(flow.totalCredits,
-                    totalVentasPorSesionAsync?.valueOrNull,
-                    totalVentasHoyAsync?.valueOrNull, true),
-            subtitle: 'Lo que queda de caja (inicial − retiros − préstamos)',
-          ),
-          const SizedBox(height: 16),
-          StatCard(
-            title: AppStrings.saldoDisponible,
-            amount: initialBalance -
-                flow.totalWithdrawalsApproved -
-                _ventasParaMostrar(flow.totalCredits,
-                    totalVentasPorSesionAsync?.valueOrNull,
-                    totalVentasHoyAsync?.valueOrNull, true) +
-                totalRecaudoMostrado,
-            subtitle: 'Saldo inicial restante + Total recaudo',
-          ),
-        ],
-        const SizedBox(height: 16),
-        _buildSaldoFavorEnContraCard(
-          initialBalance: initialBalance,
-          totalVentas: _ventasParaMostrar(
-            flow?.totalCredits,
-            totalVentasPorSesionAsync?.valueOrNull,
-            totalVentasHoyAsync?.valueOrNull,
-            flow != null,
-          ),
-          totalRetiros: flow?.totalWithdrawalsApproved ??
-              data.withdrawals
-                  .where((w) => w.isApproved)
-                  .fold<double>(0, (s, w) => s + w.amount),
-          totalRecaudo: totalRecaudoMostrado,
-        ),
+        // Una sola card: Caja actual (misma fuente que Reportes)
+        _buildCajaActualCard(cajaActual, isLoading: isLoadingCaja),
         const SizedBox(height: 24),
         // Formulario Nuevo Retiro
         if (!canWithdraw)
@@ -454,8 +429,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         else ...[
           Text(
             AppStrings.newWithdrawal,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
+            style: TextStyle(
+              color: AppColors.textPrimary(context),
               fontSize: 18,
               fontWeight: FontWeight.bold,
             ),
@@ -503,21 +478,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           ),
         ],
         const SizedBox(height: 28),
-        // Historial Mis retiros
-        Text(
-          AppStrings.myWithdrawals,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 12),
         if (data.withdrawals.any((w) => !w.isApproved)) ...[
           _buildPendingWithdrawalsBanner(data.withdrawals),
-          const SizedBox(height: 12),
         ],
-        _buildWithdrawalsList(data.withdrawals),
       ],
     );
   }
@@ -530,166 +493,13 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     bool hasFlow,
   ) {
     if (hasFlow) {
-      if (flowTotalCredits != null && flowTotalCredits > 0) return flowTotalCredits;
+      if (flowTotalCredits != null && flowTotalCredits > 0)
+        return flowTotalCredits;
       if ((totalVentasPorSesion ?? 0) > 0) return totalVentasPorSesion!;
       // Fallback: API puede no devolver cash_session_id en créditos; usar total del summary para no quedar en 0.
       return totalVentasHoy ?? 0;
     }
     return totalVentasHoy ?? 0;
-  }
-
-  Widget _buildTotalRecaudoLoadingCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            AppStrings.totalCollected,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const SizedBox(
-            height: 32,
-            width: 32,
-            child: CircularProgressIndicator(
-                color: AppColors.primary, strokeWidth: 2),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Dentro de sesión de caja',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Card "Ventas (lo que se presta)": salida de caja por préstamos. Se muestra como monto negativo en rojo.
-  Widget _buildVentasCard(double amount, {bool isLoading = false}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'VENTAS (LO QUE SE PRESTA)',
-            style: TextStyle(
-              color: AppColors.error.withOpacity(0.9),
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (isLoading)
-            const SizedBox(
-              height: 32,
-              width: 32,
-              child: CircularProgressIndicator(
-                color: AppColors.primary,
-                strokeWidth: 2,
-              ),
-            )
-          else
-            Text(
-              '-\$ ${NumberFormat('#,###.##', 'es').format(amount)}',
-              style: const TextStyle(
-                color: AppColors.error,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          const SizedBox(height: 4),
-          Text(
-            'Salida de caja por préstamos.',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Total de caja = dinero que debe tener el usuario. Caja inicial − ventas + recaudo − retiros (sumando y restando).
-  Widget _buildSaldoFavorEnContraCard({
-    required double initialBalance,
-    required double totalVentas,
-    required double totalRetiros,
-    required double totalRecaudo,
-  }) {
-    final totalCaja =
-        initialBalance - totalVentas - totalRetiros + totalRecaudo;
-    final aFavor = totalCaja >= 0;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: aFavor
-              ? AppColors.success.withOpacity(0.5)
-              : AppColors.error.withOpacity(0.5),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Total de caja',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            aFavor ? 'Saldo a favor' : 'Saldo en contra',
-            style: TextStyle(
-              color: aFavor ? AppColors.success : AppColors.error,
-              fontSize: 12,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '${aFavor ? '' : '-'}\$ ${NumberFormat('#,###.##', 'es').format(aFavor ? totalCaja : -totalCaja)}',
-            style: TextStyle(
-              color: aFavor ? AppColors.success : AppColors.error,
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Caja inicial : Ingresos- ventas+ recaudo - gastos- retiros.',
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   /// Notifica cuando retiros que estaban pendientes pasan a aprobados (persiste al salir de la pantalla).
@@ -729,6 +539,64 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     });
   }
 
+  /// Una sola card en Retiros: Caja actual (inicial + recaudo - retiros - ventas).
+  Widget _buildCajaActualCard(double amount, {bool isLoading = false}) {
+    final aFavor = amount >= 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.surface(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color:
+              (aFavor ? AppColors.success : AppColors.error).withOpacity(0.5),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Caja actual',
+            style: TextStyle(
+              color: AppColors.textSecondary(context),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (isLoading)
+            const SizedBox(
+              height: 36,
+              width: 36,
+              child: CircularProgressIndicator(
+                color: AppColors.primary,
+                strokeWidth: 2,
+              ),
+            )
+          else
+            Text(
+              '${aFavor ? '' : '-'}\$ ${NumberFormat('#,###.##', 'es').format(aFavor ? amount : -amount)}',
+              style: TextStyle(
+                color: aFavor ? AppColors.success : AppColors.error,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            'Caja inicial + Recaudo - Retiros - Ventas',
+            style: TextStyle(
+              color: AppColors.textSecondary(context),
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Alerta cuando hay retiros pendientes de aprobación.
   Widget _buildPendingWithdrawalsBanner(List<WithdrawalEntity> list) {
     final pendingCount = list.where((w) => !w.isApproved).length;
@@ -747,8 +615,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           Expanded(
             child: Text(
               AppStrings.pendingWithdrawalsAlert,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: AppColors.textPrimary(context),
                 fontSize: 14,
               ),
             ),
@@ -760,21 +628,33 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
 
   Widget _buildMyWithdrawalsSection(
       AsyncValue<WithdrawalsDataEntity> withdrawalsAsync) {
+    final isRetirosView = widget.sessionId == 'active';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          AppStrings.myWithdrawals,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
+        if (!isRetirosView)
+          Text(
+            AppStrings.myWithdrawals,
+            style: TextStyle(
+              color: AppColors.textPrimary(context),
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+        if (!isRetirosView) const SizedBox(height: 12),
         withdrawalsAsync.when(
           data: (data) {
             final list = data.withdrawals;
+            if (isRetirosView) {
+              _checkNewlyApprovedWithdrawals(list);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (list.any((w) => !w.isApproved))
+                    _buildPendingWithdrawalsBanner(list),
+                ],
+              );
+            }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -810,14 +690,14 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AppColors.warning.withOpacity(0.5)),
         ),
         child: Text(
           AppStrings.noActiveCashSession,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
+          style: TextStyle(
+            color: AppColors.textSecondary(context),
             fontSize: 16,
           ),
           textAlign: TextAlign.center,
@@ -838,8 +718,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         const SizedBox(height: 24),
         Text(
           AppStrings.newWithdrawal,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: AppColors.textPrimary(context),
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -887,8 +767,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         const SizedBox(height: 28),
         Text(
           AppStrings.myWithdrawals,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: AppColors.textPrimary(context),
             fontSize: 18,
             fontWeight: FontWeight.bold,
           ),
@@ -928,11 +808,11 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
 
   Widget _buildSessionCards(CashSessionEntity? session) {
     if (session == null) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
+      return Padding(
+        padding: const EdgeInsets.all(16),
         child: Text(
           'Sesión no encontrada',
-          style: TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: AppColors.textSecondary(context)),
         ),
       );
     }
@@ -959,13 +839,13 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: AppColors.surface(context),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             AppStrings.noWithdrawals,
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: AppColors.textSecondary(context)),
           ),
         ),
       );
@@ -977,7 +857,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: AppColors.surface(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: w.isApproved
@@ -994,8 +874,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                   children: [
                     Text(
                       formatter.format(w.amount),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: TextStyle(
+                        color: AppColors.textPrimary(context),
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
@@ -1003,16 +883,16 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                     const SizedBox(height: 4),
                     Text(
                       w.reason,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: AppColors.textSecondary(context),
                         fontSize: 14,
                       ),
                     ),
                     if (w.createdAt != null)
                       Text(
                         DateFormat('dd/MM/yyyy HH:mm').format(w.createdAt!),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: AppColors.textSecondary(context),
                           fontSize: 12,
                         ),
                       ),

@@ -18,6 +18,9 @@ abstract class CreditRepository {
     String? cashSessionId,
   });
   Future<CreditEntity> updateCredit(
-      CreditEntity credit, {String? businessId});
+    CreditEntity credit, {
+    String? businessId,
+    String? userNumber,
+    String? documentId,
+  });
 }
-

@@ -47,11 +47,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final rememberMe = prefs.getBool('remember_credentials') ?? false;
 
       if (rememberMe && savedNumber != null && savedPassword != null) {
-        setState(() {
-          _numberController.text = savedNumber;
-          _passwordController.text = savedPassword;
-          _rememberCredentials = true;
-        });
+        if (mounted) {
+          setState(() {
+            _numberController.text = savedNumber;
+            _passwordController.text = savedPassword;
+            _rememberCredentials = true;
+          });
+        }
       }
     } catch (e) {
       // Si hay error al cargar, continuar sin credenciales guardadas
@@ -147,10 +149,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final selectedBusiness = ref.watch(selectedBusinessProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) context.go('/business-selection');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background(context),
+        body: SafeArea(
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
@@ -186,10 +193,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 8),
                 ],
                 // Welcome Text
-                const Text(
+                Text(
                   AppStrings.welcomeBack,
                   style: TextStyle(
-                    color: AppColors.textPrimary,
+                    color: AppColors.textPrimary(context),
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                   ),
@@ -199,8 +206,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   selectedBusiness != null
                       ? 'Inicia sesión en ${selectedBusiness.name}'
                       : AppStrings.loginSubtitle,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: AppColors.textSecondary(context),
                     fontSize: 16,
                   ),
                 ),
@@ -244,7 +251,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       _obscurePassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondary(context),
                     ),
                     onPressed: () {
                       setState(() => _obscurePassword = !_obscurePassword);
@@ -260,6 +267,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 12),
                 // Remember Credentials Checkbox
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Checkbox(
                       value: _rememberCredentials,
@@ -271,11 +279,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       activeColor: AppColors.primary,
                       checkColor: Colors.white,
                     ),
-                    const Text(
-                      'Recordar número y contraseña',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
+                    Expanded(
+                      child: Text(
+                        'Recordar número y contraseña',
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -317,6 +328,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

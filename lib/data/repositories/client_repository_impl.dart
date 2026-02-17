@@ -51,4 +51,21 @@ class ClientRepositoryImpl implements ClientRepository {
   Future<ClientEntity> updateClient(ClientEntity client) {
     return remoteDataSource.updateClient(client);
   }
+
+  @override
+  Future<ClientEntity> versionClient(
+    ClientEntity client, {
+    String? businessId,
+    String? businessCode,
+    String? userId,
+    String? userNumber,
+  }) {
+    return remoteDataSource.versionClient(
+      client,
+      businessId: businessId,
+      businessCode: businessCode,
+      userId: userId,
+      userNumber: userNumber,
+    );
+  }
 }

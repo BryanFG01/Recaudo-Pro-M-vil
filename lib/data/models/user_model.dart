@@ -30,8 +30,8 @@ class UserModel extends UserEntity {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] as String,
-      businessId: json['business_id'] as String,
+      id: (json['id'] ?? json['_id'] ?? '').toString(),
+      businessId: (json['business_id'] ?? json['businessId'] ?? '').toString(),
       email: (json['email'] as String?) ?? '',
       name: json['name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
@@ -39,7 +39,8 @@ class UserModel extends UserEntity {
       phone: json['phone'] as String?,
       number: json['number'] as String?,
       role: json['role'] as String? ?? 'cobrador',
-      commissionPercentage: (json['commission_percentage'] as num?)?.toDouble() ?? 0,
+      commissionPercentage:
+          (json['commission_percentage'] as num?)?.toDouble() ?? 0,
       isActive: _parseIsActive(json['is_active']),
     );
   }
@@ -60,4 +61,3 @@ class UserModel extends UserEntity {
     };
   }
 }
-

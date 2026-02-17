@@ -13,10 +13,13 @@ class CreditEntity extends Equatable {
   final DateTime? lastPaymentDate;
   final DateTime createdAt;
   final DateTime? nextDueDate;
+
   /// Tasa de interés del préstamo (0–30 %).
   final double? interestRate;
+
   /// Monto total del interés (total_amount * interest_rate / 100).
   final double? totalInterest;
+
   /// Sesión de caja a la que pertenece el crédito (si aplica). Para calcular ventas por sesión.
   final String? cashSessionId;
 
@@ -59,5 +62,38 @@ class CreditEntity extends Equatable {
         totalInterest,
         cashSessionId,
       ];
-}
 
+  CreditEntity copyWith({
+    double? totalAmount,
+    double? installmentAmount,
+    int? totalInstallments,
+    int? paidInstallments,
+    int? overdueInstallments,
+    double? totalBalance,
+    double? lastPaymentAmount,
+    DateTime? lastPaymentDate,
+    DateTime? createdAt,
+    DateTime? nextDueDate,
+    double? interestRate,
+    double? totalInterest,
+    String? cashSessionId,
+  }) {
+    return CreditEntity(
+      id: id,
+      clientId: clientId,
+      totalAmount: totalAmount ?? this.totalAmount,
+      installmentAmount: installmentAmount ?? this.installmentAmount,
+      totalInstallments: totalInstallments ?? this.totalInstallments,
+      paidInstallments: paidInstallments ?? this.paidInstallments,
+      overdueInstallments: overdueInstallments ?? this.overdueInstallments,
+      totalBalance: totalBalance ?? this.totalBalance,
+      lastPaymentAmount: lastPaymentAmount ?? this.lastPaymentAmount,
+      lastPaymentDate: lastPaymentDate ?? this.lastPaymentDate,
+      createdAt: createdAt ?? this.createdAt,
+      nextDueDate: nextDueDate ?? this.nextDueDate,
+      interestRate: interestRate ?? this.interestRate,
+      totalInterest: totalInterest ?? this.totalInterest,
+      cashSessionId: cashSessionId ?? this.cashSessionId,
+    );
+  }
+}
