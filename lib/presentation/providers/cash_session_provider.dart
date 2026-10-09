@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/datasources/cash_session_remote_datasource.dart';
 import '../../data/repositories/cash_session_repository_impl.dart';
 import '../../domain/entities/cash_session_entity.dart';
+import '../../domain/entities/cash_session_flow_entity.dart';
+import '../../domain/entities/daily_summary_by_user_entity.dart';
+import '../../domain/entities/withdrawal_entity.dart';
 import '../../domain/entities/withdrawals_data_entity.dart';
 import '../../domain/usecases/cash_session/create_withdrawal_usecase.dart';
-import '../../domain/usecases/cash_session/get_active_cash_session_usecase.dart';
-import '../../domain/entities/cash_session_flow_entity.dart';
 import '../../domain/usecases/cash_session/get_cash_session_by_user_id_usecase.dart';
 import '../../domain/usecases/cash_session/get_cash_session_flow_usecase.dart';
 import '../../domain/usecases/cash_session/get_cash_session_usecase.dart';
@@ -17,22 +18,20 @@ final cashSessionRemoteDataSourceProvider =
   return CashSessionRemoteDataSourceImpl();
 });
 
-final cashSessionRepositoryProvider = Provider<CashSessionRepositoryImpl>((ref) {
-  return CashSessionRepositoryImpl(ref.watch(cashSessionRemoteDataSourceProvider));
+final cashSessionRepositoryProvider =
+    Provider<CashSessionRepositoryImpl>((ref) {
+  return CashSessionRepositoryImpl(
+      ref.watch(cashSessionRemoteDataSourceProvider));
 });
 
 final getCashSessionUseCaseProvider = Provider<GetCashSessionUseCase>((ref) {
   return GetCashSessionUseCase(ref.watch(cashSessionRepositoryProvider));
 });
 
-final getActiveCashSessionUseCaseProvider =
-    Provider<GetActiveCashSessionUseCase>((ref) {
-  return GetActiveCashSessionUseCase(ref.watch(cashSessionRepositoryProvider));
-});
-
 final getCashSessionByUserIdUseCaseProvider =
     Provider<GetCashSessionByUserIdUseCase>((ref) {
-  return GetCashSessionByUserIdUseCase(ref.watch(cashSessionRepositoryProvider));
+  return GetCashSessionByUserIdUseCase(
+      ref.watch(cashSessionRepositoryProvider));
 });
 
 final getCashSessionFlowUseCaseProvider =
@@ -40,7 +39,8 @@ final getCashSessionFlowUseCaseProvider =
   return GetCashSessionFlowUseCase(ref.watch(cashSessionRepositoryProvider));
 });
 
-final createWithdrawalUseCaseProvider = Provider<CreateWithdrawalUseCase>((ref) {
+final createWithdrawalUseCaseProvider =
+    Provider<CreateWithdrawalUseCase>((ref) {
   return CreateWithdrawalUseCase(ref.watch(cashSessionRepositoryProvider));
 });
 
@@ -56,13 +56,6 @@ final cashSessionProvider =
   return useCase(sessionId);
 });
 
-/// Sesión activa del usuario (GET /api/cash-sessions/active?user_id=...). 404 → null.
-final activeCashSessionProvider =
-    FutureProvider.family<CashSessionEntity?, String>((ref, userId) async {
-  final useCase = ref.watch(getActiveCashSessionUseCaseProvider);
-  return useCase(userId);
-});
-
 /// Sesión de caja del usuario para pintar saldo inicial (GET /api/cash-sessions/user/{userId}). 404 → null.
 final cashSessionByUserProvider =
     FutureProvider.family<CashSessionEntity?, String>((ref, userId) async {
@@ -76,7 +69,8 @@ final cashSessionByUserProvider =
 /// Saldo disponible = saldo inicial + recaudo (initial_balance + total_collected − retiros). Al aprobar retiros se invalida para ver descuentos.
 /// Si sessionId está vacío, no llama a la API y devuelve null.
 final cashSessionFlowProvider =
-    FutureProvider.family<CashSessionFlowEntity?, String>((ref, sessionId) async {
+    FutureProvider.family<CashSessionFlowEntity?, String>(
+        (ref, sessionId) async {
   if (sessionId.isEmpty) return null;
   final useCase = ref.watch(getCashSessionFlowUseCaseProvider);
   return useCase(sessionId);
@@ -87,9 +81,44 @@ final previousPendingWithdrawalIdsProvider =
     StateProvider.family<Set<String>, String>((ref, userId) => {});
 
 /// Datos del usuario: retiros + opcional saldo inicial/actual (GET /api/withdrawals/user/{userId}).
-final FutureProviderFamily<WithdrawalsDataEntity, String> withdrawalsByUserProvider =
+final FutureProviderFamily<WithdrawalsDataEntity, String>
+    withdrawalsByUserProvider =
     FutureProvider.family<WithdrawalsDataEntity, String>((ref, userId) async {
   final useCase = ref.watch(getWithdrawalsByUserUseCaseProvider);
   final result = await useCase(userId);
   return result;
+});
+
+/// Resumen diario por usuario para reportes (GET /api/cash-sessions/daily-summary/user/{userId}).
+/// Cuerpo: { "items": [...], "totals": { total_recaudo, total_ventas, total_retiros, total_gastos } }.
+final dailySummaryByUserProvider =
+    FutureProvider.family<DailySummaryByUserEntity, String>(
+        (ref, userId) async {
+  if (userId.isEmpty) {
+    return const DailySummaryByUserEntity(totals: DailySummaryTotalsEntity());
+  }
+  final repo = ref.watch(cashSessionRepositoryProvider);
+  return repo.getDailySummaryByUserId(userId);
+});
+
+/// Todas las sesiones de caja del usuario (GET /api/cash-sessions/user/{userId}).
+/// Devuelve la lista completa para sumar ingresos (initial_balance) de todas.
+final allCashSessionsByUserProvider =
+    FutureProvider.family<List<CashSessionEntity>, String>((ref, userId) async {
+  if (userId.isEmpty) return [];
+  final repo = ref.watch(cashSessionRepositoryProvider);
+  return repo.getAllCashSessionsByUserId(userId);
+});
+
+/// Retiros por sesión y usuario (GET /api/withdrawals?cash_session_id=X&user_id=Y).
+/// Clave: ({cashSessionId, userId}) record.
+final withdrawalsBySessionProvider = FutureProvider.family<
+    List<WithdrawalEntity>,
+    ({String cashSessionId, String userId})>((ref, params) async {
+  if (params.cashSessionId.isEmpty || params.userId.isEmpty) return [];
+  final repo = ref.watch(cashSessionRepositoryProvider);
+  return repo.getWithdrawalsBySession(
+    cashSessionId: params.cashSessionId,
+    userId: params.userId,
+  );
 });

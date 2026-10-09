@@ -12,41 +12,35 @@ class AppBottomNavigationBar extends StatelessWidget {
     required this.currentIndex,
   });
 
+  static const _routes = ['/dashboard', '/statistics'];
+
   @override
   Widget build(BuildContext context) {
-    return BottomNavigationBar(
-      backgroundColor: AppColors.surface,
-      selectedItemColor: AppColors.primary,
-      unselectedItemColor: AppColors.textSecondary,
-      currentIndex: currentIndex,
-      type: BottomNavigationBarType.fixed,
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          activeIcon: Icon(Icons.home),
-          label: AppStrings.home,
-        ),
-        // boton de agregar nuevo recaudo - OCULTO PERO NO ELIMINADO
-        // BottomNavigationBarItem(
-        //   icon: Icon(Icons.add_outlined),
-        //   activeIcon: Icon(Icons.add),
-        //   label: AppStrings.newCollection,
-        // ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.bar_chart_outlined),
-          activeIcon: Icon(Icons.bar_chart),
-          label: AppStrings.reports,
-        ),
-      ],
-      onTap: (index) {
-        if (index == 0) {
-          // Navegar al dashboard
-          context.go('/dashboard');
-        } else if (index == 1) {
-          // Navegar a reportes
-          context.go('/statistics');
-        }
-      },
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppColors.divider(context), width: 0.5)),
+      ),
+      child: BottomNavigationBar(
+        backgroundColor: AppColors.surface(context),
+        selectedItemColor: AppColors.textPrimary(context),
+        unselectedItemColor: AppColors.textSecondary(context),
+        currentIndex: currentIndex,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: AppStrings.home,
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart_outlined),
+            activeIcon: Icon(Icons.bar_chart),
+            label: AppStrings.reports,
+          ),
+        ],
+        onTap: (index) => context.go(_routes[index]),
+      ),
     );
   }
 }

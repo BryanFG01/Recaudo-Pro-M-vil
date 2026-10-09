@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/business_helper.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/entities/client_entity.dart';
@@ -27,7 +28,10 @@ import '../../widgets/custom_text_field.dart';
 const _uuid = Uuid();
 
 class NewClientScreen extends ConsumerStatefulWidget {
-  const NewClientScreen({super.key});
+  final String? clientId;
+  final bool isRenovation;
+
+  const NewClientScreen({super.key, this.clientId, this.isRenovation = false});
 
   @override
   ConsumerState<NewClientScreen> createState() => _NewClientScreenState();
@@ -45,8 +49,16 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
   // Credit fields
   final _creditAmountController = TextEditingController();
   final _interestController = TextEditingController(text: '20');
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now().add(const Duration(days: 30));
+  DateTime _startDate = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
+  DateTime _endDate = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  ).add(const Duration(days: 30));
 
   // Location fields
   double? _latitude;
@@ -58,6 +70,12 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
   bool _isCapturingDocument = false;
 
   bool _isLoading = false;
+  // Almacena el ID temporal si se crea el cliente pero falla algo después (crédito, etc)
+  // para evitar crear duplicados al reintentar.
+  String? _tempClientId;
+
+  ClientEntity? _existingClient;
+  CreditEntity? _existingCredit;
 
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -187,8 +205,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     if (_creditAmountController.text.trim().isEmpty) return 0;
 
     // Limpiar formato: quitar comas, puntos y todo lo no numérico (500.000 / 500,000 → 500000)
-    final cleanedAmount =
-        _creditAmountController.text.replaceAll(RegExp(r'[^\d]'), '');
+    final cleanedAmount = _creditAmountController.text.replaceAll(
+      RegExp(r'[^\d]'),
+      '',
+    );
     final creditAmount = double.tryParse(cleanedAmount) ?? 0;
     if (creditAmount <= 0) return 0;
 
@@ -220,6 +240,56 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     _interestController.addListener(() {
       setState(() {});
     });
+
+    if (widget.clientId != null) {
+      _loadExistingData();
+    }
+  }
+
+  Future<void> _loadExistingData() async {
+    setState(() => _isLoading = true);
+    try {
+      final client = await ref
+          .read(clientRepositoryProvider)
+          .getClientById(widget.clientId!);
+      if (client != null) {
+        _existingClient = client;
+        final names = client.name.split(' ');
+        if (names.length >= 2) {
+          _firstNameController.text = names[0];
+          _lastNameController.text = names.sublist(1).join(' ');
+        } else {
+          _firstNameController.text = client.name;
+        }
+        _phoneController.text = client.phone;
+        _addressController.text = client.address ?? '';
+        _documentIdController.text = client.documentId ?? '';
+        _latitude = client.latitude;
+        _longitude = client.longitude;
+
+        // Fetch latest credit
+        final businessId = BusinessHelper.getCurrentBusinessIdOrThrow(ref);
+        final credits = await ref
+            .read(creditRepositoryProvider)
+            .getCreditsByClientId(businessId, client.id);
+        if (credits.isNotEmpty) {
+          // Sort by creation date or just take the first one (active one)
+          _existingCredit = credits.first;
+          _creditAmountController.text = NumberFormat(
+            '#,###',
+          ).format(_existingCredit!.totalAmount.toInt());
+          _interestController.text =
+              _existingCredit!.interestRate?.toString() ?? '20';
+          _startDate = _existingCredit!.createdAt;
+          // Calculate end date based on installments or use existing if available
+          // For now, keep the defaults or use credit's next due date related logic
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading existing client: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -243,13 +313,22 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
       builder: (context, child) {
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: AppColors.primary,
-              surface: AppColors.surface,
-              background: AppColors.background,
-            ),
+            colorScheme: isDark
+                ? ColorScheme.dark(
+                    primary: AppColors.primary,
+                    onPrimary: AppColors.onPrimary,
+                    surface: AppColors.surface(context),
+                    onSurface: AppColors.textPrimary(context),
+                  )
+                : ColorScheme.light(
+                    primary: AppColors.primary,
+                    onPrimary: AppColors.onPrimary,
+                    surface: AppColors.surface(context),
+                    onSurface: AppColors.textPrimary(context),
+                  ),
           ),
           child: child!,
         );
@@ -314,7 +393,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Los permisos de ubicación están denegados permanentemente'),
+                'Los permisos de ubicación están denegados permanentemente',
+              ),
               backgroundColor: AppColors.error,
             ),
           );
@@ -378,10 +458,14 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       // Si no hay negocio seleccionado (p. ej. tras esperar en la vista), usar el del usuario actual
       BusinessEntity? business = selectedBusiness;
       if (business == null) {
-        business = await ref.read(businessRepositoryProvider).getBusinessById(currentUser.businessId);
+        business = await ref
+            .read(businessRepositoryProvider)
+            .getBusinessById(currentUser.businessId);
       }
       if (business == null) {
-        throw Exception('Negocio no disponible. Selecciona un negocio o vuelve a entrar.');
+        throw Exception(
+          'Negocio no disponible. Selecciona un negocio o vuelve a entrar.',
+        );
       }
 
       // Subir foto del documento si se capturó; obtener URL para document_file_url
@@ -396,7 +480,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                    'La foto no pudo asociarse al cliente. Cliente se creará sin foto del documento.'),
+                  'La foto no pudo asociarse al cliente. Cliente se creará sin foto del documento.',
+                ),
                 backgroundColor: AppColors.warning,
                 duration: Duration(seconds: 4),
               ),
@@ -407,7 +492,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(
-                    'Error al subir la foto: ${e is Exception ? e.toString().replaceFirst('Exception: ', '') : e}'),
+                  'Error al subir la foto: ${e is Exception ? e.toString().replaceFirst('Exception: ', '') : e}',
+                ),
                 backgroundColor: AppColors.error,
                 duration: const Duration(seconds: 5),
               ),
@@ -417,112 +503,269 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
         }
       }
 
-      // Create client with UUID
-      final clientId = _uuid.v4();
-      final client = ClientEntity(
-        id: clientId,
-        name: fullName,
-        phone: _phoneController.text.trim(),
-        documentId: _documentIdController.text.trim().isEmpty
-            ? null
-            : _documentIdController.text.trim(),
-        documentFileUrl: documentFileUrl,
-        address: _addressController.text.trim().isEmpty
-            ? null
-            : _addressController.text.trim(),
-        latitude: _latitude,
-        longitude: _longitude,
-        createdAt: DateTime.now(),
-      );
-
       final userNumber =
           currentUser.number ?? currentUser.employeeCode ?? currentUser.id;
-      final createdClient = await clientRepository.createClient(
-        client,
-        businessId: businessId,
-        businessCode: business.code,
-        userId: currentUser.id,
-        userNumber: userNumber,
-      );
+
+      ClientEntity finalClient;
+      // Si ya tenemos un ID (edición/renovación) O si acabamos de crear uno (pero falló algo después)
+      if (widget.clientId != null || _tempClientId != null) {
+        // En modo edición o renovación, SIEMPRE usar update del cliente
+        // O si ya se creó parcialmente (_tempClientId)
+        final effectiveId = widget.clientId ?? _tempClientId!;
+        debugPrint('Updating client with ID: $effectiveId');
+
+        final clientToUpdate = _existingClient ??
+            ClientEntity(
+              id: effectiveId,
+              name: fullName,
+              phone: _phoneController.text.trim(),
+              createdAt: DateTime.now(),
+            );
+
+        final updatedClient = clientToUpdate.copyWith(
+          name: fullName,
+          phone: _phoneController.text.trim(),
+          documentId: _documentIdController.text.trim().isEmpty
+              ? null
+              : _documentIdController.text.trim(),
+          documentFileUrl: documentFileUrl ?? _existingClient?.documentFileUrl,
+          address: _addressController.text.trim().isEmpty
+              ? null
+              : _addressController.text.trim(),
+          latitude: _latitude,
+          longitude: _longitude,
+        );
+        if (widget.isRenovation) {
+          // Renovación: crear nueva versión del cliente preservando el original
+          finalClient = await clientRepository.versionClient(
+            updatedClient,
+            businessId: businessId,
+            businessCode: business.code,
+            userId: currentUser.id,
+            userNumber: userNumber,
+          );
+          debugPrint('Client versioned successfully. New ID: ${finalClient.id}');
+        } else {
+          finalClient = await clientRepository.updateClient(updatedClient);
+          debugPrint('Client updated successfully. ID: ${finalClient.id}');
+        }
+      } else {
+        // Create client with UUID
+        final client = ClientEntity(
+          id: _uuid.v4(),
+          name: fullName,
+          phone: _phoneController.text.trim(),
+          documentId: _documentIdController.text.trim().isEmpty
+              ? null
+              : _documentIdController.text.trim(),
+          documentFileUrl: documentFileUrl,
+          address: _addressController.text.trim().isEmpty
+              ? null
+              : _addressController.text.trim(),
+          latitude: _latitude,
+          longitude: _longitude,
+          createdAt: DateTime.now(),
+        );
+
+        finalClient = await clientRepository.createClient(
+          client,
+          businessId: businessId,
+          businessCode: business.code,
+          userId: currentUser.id,
+          userNumber: userNumber,
+        );
+        // Guardar ID temporalmente por si falla algo después (crédito, imagen, etc)
+        // para que al reintentar se use update en vez de create.
+        _tempClientId = finalClient.id;
+      }
 
       if (_creditAmountController.text.trim().isNotEmpty) {
-        // Limpiar formato: quitar comas, puntos y todo lo no numérico (500.000 / 500,000 → 500000)
-        final cleanedAmount =
-            _creditAmountController.text.replaceAll(RegExp(r'[^\d]'), '');
+        final cleanedAmount = _creditAmountController.text.replaceAll(
+          RegExp(r'[^\d]'),
+          '',
+        );
         final creditAmount = double.tryParse(cleanedAmount) ?? 0;
         if (creditAmount > 0) {
           final interest =
               double.tryParse(_interestController.text.trim()) ?? 0;
-
-          // Interés = Monto × Tasa / 100. Total a pagar = Principal + Interés
           final interestAmount = creditAmount * interest / 100;
           final totalWithInterest = creditAmount + interestAmount;
 
           final workingDays = _calculateWorkingDays(_startDate, _endDate);
           if (workingDays <= 0) {
             throw Exception(
-                'El rango de fechas debe incluir al menos un día hábil (lunes a sábado)');
+              'El rango de fechas debe incluir al menos un día hábil (lunes a sábado)',
+            );
           }
 
-          // Cuota diaria = Total a pagar ÷ Días totales (hábiles)
           final dailyInstallment = totalWithInterest / workingDays;
 
-          // Usar el id del cliente devuelto por la API (no el UUID local)
-          final credit = CreditEntity(
-            id: _uuid.v4(),
-            clientId: createdClient.id,
-            totalAmount: creditAmount, // principal
-            installmentAmount: dailyInstallment,
-            totalInstallments: workingDays,
-            paidInstallments: 0,
-            overdueInstallments: 0,
-            totalBalance:
-                totalWithInterest, // total a pagar (principal + interés)
-            lastPaymentAmount: 0,
-            lastPaymentDate: null,
-            createdAt: _startDate,
-            nextDueDate: _startDate.add(const Duration(days: 1)),
-            interestRate: interest,
-            totalInterest: interestAmount,
-          );
+          // Si hay un cliente existente, intentamos actualizar el crédito (Renovación)
+          if (widget.clientId != null && widget.isRenovation) {
+            debugPrint('Renovation mode (isRenovation=true): Looking for existing credit for client ${widget.clientId}');
+            // Si no tenemos el crédito en memoria, intentamos buscarlo una última vez
+            if (_existingCredit == null) {
+              final credits = await ref
+                  .read(creditRepositoryProvider)
+                  .getCreditsByClientId(businessId, widget.clientId!);
+              debugPrint('Found ${credits.length} credits for client ${widget.clientId}');
+              if (credits.isNotEmpty) {
+                _existingCredit = credits.first;
+                debugPrint('Using existing credit ID: ${_existingCredit!.id}');
+              } else {
+                debugPrint('WARNING: No existing credit found for renovation!');
+              }
+            }
 
-          // Sesión de caja activa: enviar cash_session_id para que el backend sume esta venta en total_credits
-          final activeSession =
-              await ref.read(cashSessionByUserProvider(currentUser.id).future);
+            if (_existingCredit != null) {
+              final activeSession = await ref.read(
+                cashSessionByUserProvider(currentUser.id).future,
+              );
 
-          await createCreditUseCase(
-            credit,
-            businessId: businessId,
-            businessCode: business.code,
-            userNumber: userNumber,
-            documentId: client.documentId,
-            cashSessionId: activeSession?.id,
-          );
+              final updatedCredit = _existingCredit!.copyWith(
+                totalAmount: creditAmount,
+                installmentAmount: dailyInstallment,
+                totalInstallments: workingDays,
+                totalBalance: totalWithInterest,
+                interestRate: interest,
+                totalInterest: interestAmount,
+                createdAt: _startDate,
+                nextDueDate: _startDate.add(const Duration(days: 1)),
+                cashSessionId: activeSession?.id,
+              );
+
+              debugPrint('Renovating Credit (Update): ${updatedCredit.id}');
+              await ref.read(creditRepositoryProvider).updateCredit(
+                    updatedCredit,
+                    businessId: businessId,
+                    userNumber: userNumber,
+                    documentId: finalClient.documentId,
+                  );
+            } else {
+              // Si de verdad NO hay crédito previo, entonces creamos uno nuevo para este cliente existente
+              debugPrint(
+                'No existing credit found for renovation, creating new one for client ${finalClient.id}',
+              );
+              debugPrint(
+                'WARNING: Creating credit with client_id: ${finalClient.id} (original widget.clientId: ${widget.clientId})',
+              );
+
+              // Verificar que el cliente existe antes de crear el crédito
+              final clientExists = await ref
+                  .read(clientRepositoryProvider)
+                  .getClientById(finalClient.id);
+              if (clientExists == null) {
+                throw Exception(
+                  'El cliente ${finalClient.id} no existe en el backend. '
+                  'Puede haber un problema de sincronización. Intenta refrescar la lista de clientes.',
+                );
+              }
+              debugPrint('Client verified to exist before creating credit: ${clientExists.id}');
+
+              final credit = CreditEntity(
+                id: _uuid.v4(),
+                clientId: finalClient.id,
+                totalAmount: creditAmount,
+                installmentAmount: dailyInstallment,
+                totalInstallments: workingDays,
+                paidInstallments: 0,
+                overdueInstallments: 0,
+                totalBalance: totalWithInterest,
+                lastPaymentAmount: 0,
+                lastPaymentDate: null,
+                createdAt: _startDate,
+                nextDueDate: _startDate.add(const Duration(days: 1)),
+                interestRate: interest,
+                totalInterest: interestAmount,
+              );
+
+              final activeSession = await ref.read(
+                cashSessionByUserProvider(currentUser.id).future,
+              );
+
+              await createCreditUseCase(
+                credit,
+                businessId: businessId,
+                businessCode: business.code,
+                userNumber: userNumber,
+                documentId: finalClient.documentId,
+                cashSessionId: activeSession?.id,
+              );
+            }
+          } else {
+            // Flujo normal de creación (Cliente y Crédito completamente nuevos)
+            final credit = CreditEntity(
+              id: _uuid.v4(),
+              clientId: finalClient.id,
+              totalAmount: creditAmount,
+              installmentAmount: dailyInstallment,
+              totalInstallments: workingDays,
+              paidInstallments: 0,
+              overdueInstallments: 0,
+              totalBalance: totalWithInterest,
+              lastPaymentAmount: 0,
+              lastPaymentDate: null,
+              createdAt: _startDate,
+              nextDueDate: _startDate.add(const Duration(days: 1)),
+              interestRate: interest,
+              totalInterest: interestAmount,
+            );
+
+            final activeSession = await ref.read(
+              cashSessionByUserProvider(currentUser.id).future,
+            );
+
+            await createCreditUseCase(
+              credit,
+              businessId: businessId,
+              businessCode: business.code,
+              userNumber: userNumber,
+              documentId: finalClient.documentId,
+              cashSessionId: activeSession?.id,
+            );
+          }
         }
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(AppStrings.clientAndCreditCreated),
+          SnackBar(
+            content: Text(
+              widget.clientId != null
+                  ? 'Cliente y crédito actualizados'
+                  : AppStrings.clientAndCreditCreated,
+            ),
             backgroundColor: AppColors.success,
           ),
         );
         // Refresh clients and credits lists; ventas y recaudo para Sesión de Caja
         ref.invalidate(clientsProvider);
         ref.invalidate(creditsProvider);
-        ref.invalidate(totalVentasHoyProvider(
-            (businessId: currentUser.businessId, userId: currentUser.id)));
-        ref.invalidate(totalRecaudoRealProvider(
-            (businessId: currentUser.businessId, userId: currentUser.id)));
+        ref.invalidate(
+          totalVentasHoyProvider((
+            businessId: currentUser.businessId,
+            userId: currentUser.id,
+          )),
+        );
+        ref.invalidate(
+          totalRecaudoRealProvider((
+            businessId: currentUser.businessId,
+            userId: currentUser.id,
+          )),
+        );
         // Refrescar flow de sesión de caja para que total_credits incluya este crédito
-        final session = await ref.read(cashSessionByUserProvider(currentUser.id).future);
+        final session = await ref.read(
+          cashSessionByUserProvider(currentUser.id).future,
+        );
         if (session?.id != null && session!.id.isNotEmpty) {
           ref.invalidate(cashSessionFlowProvider(session.id));
-          ref.invalidate(totalVentasPorSesionProvider(
-              (businessId: currentUser.businessId,
-                  userId: currentUser.id,
-                  sessionId: session.id)));
+          ref.invalidate(
+            totalVentasPorSesionProvider((
+              businessId: currentUser.businessId,
+              userId: currentUser.id,
+              sessionId: session.id,
+            )),
+          );
         }
         context.pop();
       }
@@ -532,25 +775,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
         final msg = e is Exception
             ? e.toString().replaceFirst('Exception: ', '')
             : e.toString();
-        // 404 "Cliente no encontrado" al crear suele indicar sesión inválida en el backend; cerrar sesión y redirigir a login.
-        final is404Session = msg.contains('404') || msg.contains('Cliente no encontrado');
-        if (is404Session) {
-          await ref.read(authRepositoryProvider).signOut();
-          ref.read(currentUserProvider.notifier).clearUser();
-          ref.read(selectedBusinessProvider.notifier).clearBusiness();
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                    'Tu sesión pudo haber expirado. Inicia sesión de nuevo para crear clientes.'),
-                backgroundColor: AppColors.warning,
-                duration: Duration(seconds: 5),
-              ),
-            );
-            context.go('/login');
-          }
-          return;
-        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al guardar: $msg'),
@@ -570,26 +795,30 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
   @override
   Widget build(BuildContext context) {
     final dateFormatter = DateFormat('dd/MM/yyyy');
-    final currencyFormatter =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final currencyFormatter = NumberFormat.currency(
+      symbol: '\$',
+      decimalDigits: 2,
+    );
     final dailyInstallment = _calculateDailyInstallment();
     final workingDays = _calculateWorkingDays(_startDate, _endDate);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary(context)),
           onPressed: () => context.pop(),
         ),
-        title: const Text(
-          AppStrings.createNewClient,
+        title: Text(
+          widget.clientId != null
+              ? (widget.isRenovation ? 'Renovar cliente' : 'Editar cliente')
+              : AppStrings.createNewClient,
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -663,25 +892,35 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                           ? const SizedBox(
                               width: 16,
                               height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
                             )
                           : const Icon(Icons.my_location, size: 18),
                       label: Text(
                         _latitude != null && _longitude != null
                             ? 'Ubicación capturada'
                             : 'Capturar ubicación actual',
-                        style: const TextStyle(fontSize: 12),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _latitude != null && _longitude != null
                             ? AppColors.success
-                            : AppColors.primary,
+                            : AppColors.textPrimary(context),
                         side: BorderSide(
                           color: _latitude != null && _longitude != null
                               ? AppColors.success
-                              : AppColors.primary,
+                              : AppColors.textPrimary(context),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusControl,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -693,7 +932,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                   'Lat: ${_latitude!.toStringAsFixed(6)}, Lng: ${_longitude!.toStringAsFixed(6)}',
                   style: const TextStyle(
                     color: AppColors.success,
-                    fontSize: 11,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -719,54 +958,49 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               // Tomar foto del documento
               Text(
                 AppStrings.takeDocumentPhoto,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: AppColors.textSecondary(context),
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 10),
               Material(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.surface(context),
+                borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                 child: InkWell(
                   onTap: _isCapturingDocument ? null : _takeDocumentPhoto,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       vertical: 20,
                       horizontal: 20,
                     ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.primary.withOpacity(0.5),
-                        width: 1.5,
-                      ),
-                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (_isCapturingDocument)
-                          const SizedBox(
+                          SizedBox(
                             width: 24,
                             height: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.primary,
+                              color: AppColors.textPrimary(context),
                             ),
                           )
                         else
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
+                              color: AppColors.mint,
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
                             ),
                             child: const Icon(
                               Icons.camera_alt_rounded,
                               size: 28,
-                              color: AppColors.primary,
+                              color: AppColors.carbon,
                             ),
                           ),
                         const SizedBox(width: 14),
@@ -774,10 +1008,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                           _isCapturingDocument
                               ? 'Capturando...'
                               : AppStrings.takeDocumentPhoto,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
+                            color: AppColors.textPrimary(context),
                           ),
                         ),
                       ],
@@ -788,7 +1022,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               if (_capturedDocumentFile != null) ...[
                 const SizedBox(height: 14),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   child: Stack(
                     alignment: Alignment.topRight,
                     children: [
@@ -798,8 +1032,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         width: double.infinity,
                         fit: BoxFit.cover,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
                         child: Icon(
                           Icons.check_circle,
                           color: AppColors.success,
@@ -813,12 +1047,12 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               const SizedBox(height: 32),
 
               // Credit Details Section
-              const Text(
+              Text(
                 AppStrings.creditDetails,
                 style: TextStyle(
-                  color: AppColors.textPrimary,
+                  color: AppColors.textPrimary(context),
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 16),
@@ -829,8 +1063,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                 children: [
                   Text(
                     AppStrings.creditAmount,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: AppColors.textSecondary(context),
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                     ),
@@ -839,35 +1073,41 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                   TextFormField(
                     controller: _creditAmountController,
                     keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                    ],
-                    style: const TextStyle(color: AppColors.textPrimary),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
+                      fontSize: 16,
+                    ),
                     decoration: InputDecoration(
                       hintText: AppStrings.enterCreditAmount,
-                      hintStyle:
-                          const TextStyle(color: AppColors.textSecondary),
-                      prefixIcon: const Icon(
+                      hintStyle: TextStyle(
+                        color: AppColors.textSecondary(context),
+                      ),
+                      prefixIcon: Icon(
                         Icons.attach_money,
-                        color: AppColors.textSecondary,
+                        color: AppColors.textSecondary(context),
                       ),
                       filled: true,
-                      fillColor: AppColors.surface,
+                      fillColor: AppColors.surfaceLight(context),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusControl,
+                        ),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: AppColors.textSecondary.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusControl,
                         ),
+                        borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 2,
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusControl,
+                        ),
+                        borderSide: BorderSide(
+                          color: AppColors.textPrimary(context),
+                          width: 1.5,
                         ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
@@ -887,10 +1127,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.startDate,
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: AppColors.textSecondary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -898,24 +1138,29 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         const SizedBox(height: 8),
                         InkWell(
                           onTap: () => _selectDate(context, true),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusControl,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
+                              color: AppColors.surfaceLight(context),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.calendar_today,
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.textSecondary(context),
                                   size: 20,
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
                                   dateFormatter.format(_startDate),
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary(context),
                                     fontSize: 16,
                                   ),
                                 ),
@@ -931,10 +1176,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           AppStrings.endDate,
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: AppColors.textSecondary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -942,24 +1187,29 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         const SizedBox(height: 8),
                         InkWell(
                           onTap: () => _selectDate(context, false),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusControl,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
+                              color: AppColors.surfaceLight(context),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.calendar_today,
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.textSecondary(context),
                                   size: 20,
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
                                   dateFormatter.format(_endDate),
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
+                                  style: TextStyle(
+                                    color: AppColors.textPrimary(context),
                                     fontSize: 16,
                                   ),
                                 ),
@@ -988,14 +1238,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               if (_creditAmountController.text.trim().isNotEmpty &&
                   workingDays > 0)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: AppColors.primary,
-                      width: 1,
-                    ),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1003,20 +1249,28 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            AppStrings.calculatedDailyInstallment,
-                            style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              AppStrings.calculatedDailyInstallment,
+                              style: TextStyle(
+                                color: AppColors.onPrimary.withValues(
+                                  alpha: 0.7,
+                                ),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 12),
                           Text(
                             currencyFormatter.format(dailyInstallment),
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                            style: TextStyle(
+                              color: AppColors.onPrimary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                         ],
@@ -1024,9 +1278,9 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                       const SizedBox(height: 8),
                       Text(
                         '${AppStrings.totalDays}: $workingDays días (sin domingos)',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
+                        style: TextStyle(
+                          color: AppColors.onPrimary.withValues(alpha: 0.6),
+                          fontSize: 13,
                         ),
                       ),
                     ],
@@ -1036,7 +1290,9 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
 
               // Save Button
               CustomButton(
-                text: AppStrings.saveClientAndCredit,
+                text: widget.clientId != null
+                    ? (widget.isRenovation ? 'Renovar' : 'Actualizar')
+                    : AppStrings.saveClientAndCredit,
                 onPressed: _handleSaveClientAndCredit,
                 isLoading: _isLoading,
               ),

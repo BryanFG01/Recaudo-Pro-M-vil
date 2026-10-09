@@ -7,9 +7,11 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../domain/entities/client_entity.dart';
 import '../../domain/entities/collection_entity.dart';
-import '../../domain/entities/credit_entity.dart';
+import '../../domain/entities/credit_entity.dart';
+import '../../core/utils/currency_format.dart';
 
 class PrintPreviewDialog extends StatelessWidget {
   final ClientEntity client;
@@ -18,6 +20,8 @@ class PrintPreviewDialog extends StatelessWidget {
   final double? pendingPaymentAmount;
   final String? paymentMethod;
   final bool isFullPayment;
+  /// En Visita Cliente no se muestra "Cuotas Atrasadas"; en otras vistas puede mostrarse.
+  final bool showOverdueInstallments;
 
   const PrintPreviewDialog({
     super.key,
@@ -27,11 +31,12 @@ class PrintPreviewDialog extends StatelessWidget {
     this.pendingPaymentAmount,
     this.paymentMethod,
     this.isFullPayment = false,
+    this.showOverdueInstallments = true,
   });
 
   Future<Uint8List> _generatePdf() async {
     final pdf = pw.Document();
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final formatter = AppCurrency.formatter;
     final dateFormatter = DateFormat('dd/MM/yyyy');
     final timeFormatter = DateFormat('HH:mm');
 
@@ -152,7 +157,7 @@ class PrintPreviewDialog extends StatelessWidget {
                   ),
                 ],
               ),
-              if (isOverdue) ...[
+              if (showOverdueInstallments && isOverdue) ...[
                 pw.SizedBox(height: 2),
                 pw.Text(
                   'Cuotas Atrasadas: ${credit.overdueInstallments}',
@@ -275,7 +280,7 @@ class PrintPreviewDialog extends StatelessWidget {
   }
 
   Widget _buildPreviewContent(BuildContext context) {
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final formatter = AppCurrency.formatter;
     final dateFormatter = DateFormat('dd/MM/yyyy');
     final timeFormatter = DateFormat('HH:mm');
 
@@ -285,10 +290,12 @@ class PrintPreviewDialog extends StatelessWidget {
     final isOverdue = credit.overdueInstallments > 0;
     final isLargerThanInstallment = paymentAmount > credit.installmentAmount;
 
+    // El papel del comprobante se mantiene blanco: es la vista previa de un impreso.
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        color: AppColors.paper,
+        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+        border: Border.all(color: AppColors.divider(context)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: SingleChildScrollView(
@@ -403,13 +410,13 @@ class PrintPreviewDialog extends StatelessWidget {
                 ),
               ],
             ),
-            if (isOverdue) ...[
+            if (showOverdueInstallments && isOverdue) ...[
               const SizedBox(height: 2),
               Text(
                 'Cuotas Atrasadas: ${credit.overdueInstallments}',
                 style: const TextStyle(
                   fontSize: 8,
-                  color: Colors.red,
+                  color: AppColors.error,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -493,7 +500,7 @@ class PrintPreviewDialog extends StatelessWidget {
                   'Abono mayor a la cuota',
                   style: TextStyle(
                     fontSize: 7,
-                    color: Colors.green,
+                    color: AppColors.success,
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -528,19 +535,19 @@ class PrintPreviewDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.surface(context),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
         height: MediaQuery.of(context).size.height * 0.8,
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            const Text(
-              'Previsualización de Impresión',
+            Text(
+              'Previsualización de impresión',
               style: TextStyle(
-                color: AppColors.textPrimary,
+                color: AppColors.textPrimary(context),
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 16),
@@ -552,14 +559,15 @@ class PrintPreviewDialog extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton(
+                  child: OutlinedButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: Colors.white,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary(context),
+                      minimumSize: const Size(0, 48),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusControl),
                       ),
                     ),
                     child: const Text(
@@ -603,11 +611,14 @@ class PrintPreviewDialog extends StatelessWidget {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.surfaceLight(context),
+                      foregroundColor: AppColors.textPrimary(context),
+                      elevation: 0,
+                      minimumSize: const Size(0, 48),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusControl),
                       ),
                     ),
                     child: const Icon(Icons.share, size: 20),
@@ -640,11 +651,14 @@ class PrintPreviewDialog extends StatelessWidget {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.success,
-                      foregroundColor: Colors.white,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: AppColors.onPrimary,
+                      elevation: 0,
+                      minimumSize: const Size(0, 48),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusControl),
                       ),
                     ),
                     child: const Text(

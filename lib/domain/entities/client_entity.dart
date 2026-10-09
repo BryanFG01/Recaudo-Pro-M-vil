@@ -5,6 +5,7 @@ class ClientEntity extends Equatable {
   final String name;
   final String phone;
   final String? documentId;
+
   /// URL del documento (ej: DNI, PDF) subido a storage.
   final String? documentFileUrl;
   final String? address;
@@ -26,14 +27,36 @@ class ClientEntity extends Equatable {
 
   @override
   List<Object?> get props => [
-    id,
-    name,
-    phone,
-    documentId,
-    documentFileUrl,
-    address,
-    latitude,
-    longitude,
-    createdAt,
-  ];
+        id,
+        name,
+        phone,
+        documentId,
+        documentFileUrl,
+        address,
+        latitude,
+        longitude,
+        createdAt,
+      ];
+
+  ClientEntity copyWith({
+    String? name,
+    String? phone,
+    String? documentId,
+    String? documentFileUrl,
+    String? address,
+    double? latitude,
+    double? longitude,
+  }) {
+    return ClientEntity(
+      id: id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      documentId: documentId ?? this.documentId,
+      documentFileUrl: documentFileUrl ?? this.documentFileUrl,
+      address: address ?? this.address,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      createdAt: createdAt,
+    );
+  }
 }

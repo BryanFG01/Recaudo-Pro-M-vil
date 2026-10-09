@@ -15,9 +15,9 @@ class CollectionModel extends CollectionEntity {
 
   factory CollectionModel.fromJson(Map<String, dynamic> json) {
     return CollectionModel(
-      id: _str(json['id'], ''),
-      creditId: _str(json['credit_id'], ''),
-      clientId: _str(json['client_id'], ''),
+      id: _str(json['id'] ?? json['_id'] ?? json['collection_id'], ''),
+      creditId: _str(json['credit_id'] ?? json['creditId'], ''),
+      clientId: _str(json['client_id'] ?? json['clientId'], ''),
       amount: _toDouble(json['amount'], 0),
       paymentDate: _parseDate(json['payment_date']) ?? DateTime.now(),
       notes: json['notes'] as String?,

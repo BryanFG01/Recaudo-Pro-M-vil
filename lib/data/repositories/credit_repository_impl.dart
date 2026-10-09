@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../domain/entities/credit_entity.dart';
 import '../../domain/entities/credit_summary_entity.dart';
 import '../../domain/repositories/credit_repository.dart';
@@ -16,8 +18,18 @@ class CreditRepositoryImpl implements CreditRepository {
   @override
   Future<List<CreditEntity>> getCreditsByClientId(
       String businessId, String clientId) async {
+    debugPrint('getCreditsByClientId - businessId: $businessId, clientId: $clientId');
     final all = await remoteDataSource.getCreditsByBusiness(businessId);
-    return all.where((c) => c.clientId == clientId).toList();
+    debugPrint('getCreditsByClientId - Total credits for business: ${all.length}');
+    final filtered = all.where((c) => c.clientId == clientId).toList();
+    debugPrint('getCreditsByClientId - Filtered credits for client: ${filtered.length}');
+    if (filtered.isEmpty && all.isNotEmpty) {
+      debugPrint('getCreditsByClientId - Client IDs in all credits:');
+      for (final c in all.take(5)) {
+        debugPrint('  - Credit ${c.id}: client_id = ${c.clientId}');
+      }
+    }
+    return filtered;
   }
 
   @override
@@ -57,7 +69,16 @@ class CreditRepositoryImpl implements CreditRepository {
 
   @override
   Future<CreditEntity> updateCredit(
-      CreditEntity credit, {String? businessId}) {
-    return remoteDataSource.updateCredit(credit, businessId: businessId);
+    CreditEntity credit, {
+    String? businessId,
+    String? userNumber,
+    String? documentId,
+  }) {
+    return remoteDataSource.updateCredit(
+      credit,
+      businessId: businessId,
+      userNumber: userNumber,
+      documentId: documentId,
+    );
   }
 }

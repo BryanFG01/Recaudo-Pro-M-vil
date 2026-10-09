@@ -41,8 +41,8 @@ class CollectionRepositoryImpl implements CollectionRepository {
   }
 
   @override
-  Future<CollectionEntity> createCollection(
-      CollectionEntity collection, {String? businessId}) {
+  Future<CollectionEntity> createCollection(CollectionEntity collection,
+      {String? businessId}) {
     return remoteDataSource.createCollection(collection,
         businessId: businessId);
   }
@@ -69,5 +69,10 @@ class CollectionRepositoryImpl implements CollectionRepository {
     String? businessId,
   }) {
     return remoteDataSource.getWeeklyCollection(businessId: businessId);
+  }
+
+  @override
+  Future<void> deleteCollection(String id) {
+    return remoteDataSource.deleteCollection(id);
   }
 }

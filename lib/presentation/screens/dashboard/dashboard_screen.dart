@@ -4,12 +4,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/business_provider.dart';
 import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../widgets/dashboard_card.dart';
 import '../../widgets/stat_card.dart';
@@ -22,22 +24,22 @@ class DashboardScreen extends ConsumerWidget {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          backgroundColor: AppColors.surface,
+          backgroundColor: AppColors.surface(dialogContext),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           ),
-          title: const Text(
-            'Cerrar Sesión',
+          title: Text(
+            'Cerrar sesión',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.textPrimary(dialogContext),
               fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          content: const Text(
+          content: Text(
             '¿Estás seguro de que deseas cerrar sesión?',
             style: TextStyle(
-              color: AppColors.textSecondary,
+              color: AppColors.textSecondary(dialogContext),
               fontSize: 16,
             ),
           ),
@@ -49,7 +51,7 @@ class DashboardScreen extends ConsumerWidget {
               child: Text(
                 'Cancelar',
                 style: TextStyle(
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondary(dialogContext),
                   fontSize: 16,
                 ),
               ),
@@ -57,18 +59,17 @@ class DashboardScreen extends ConsumerWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
-                ref.read(authRepositoryProvider).signOut().then((_) {
-                  ref.read(currentUserProvider.notifier).setUser(null);
+                ref.read(currentUserProvider.notifier).signOut().then((_) {
                   ref.read(selectedBusinessProvider.notifier).clearBusiness();
-                  context.go('/login');
+                  if (context.mounted) context.go('/login');
                 });
               },
               child: Text(
                 'Aceptar',
                 style: TextStyle(
-                  color: AppColors.primary,
+                  color: AppColors.textPrimary(dialogContext),
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -85,14 +86,14 @@ class DashboardScreen extends ConsumerWidget {
     final statsAsync = ref.watch(dashboardStatsProvider(0));
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.background(context),
         elevation: 0,
         leading: Container(
           margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.pink,
+          decoration: const BoxDecoration(
+            color: AppColors.mint,
             shape: BoxShape.circle,
           ),
           child: user?.avatarUrl != null
@@ -102,24 +103,39 @@ class DashboardScreen extends ConsumerWidget {
                     fit: BoxFit.cover,
                   ),
                 )
-              : const Icon(Icons.person, color: Colors.white),
+              : const Icon(Icons.person, color: AppColors.carbon),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               '${AppStrings.hello}, ${user?.name ?? 'Usuario'}',
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: AppColors.textPrimary(context),
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
         actions: [
+          // Toggle modo claro/oscuro
+          Builder(
+            builder: (context) {
+              final themeMode = ref.watch(themeModeProvider);
+              final isDark = themeMode == ThemeMode.dark;
+              return IconButton(
+                icon: Icon(
+                  isDark ? Icons.light_mode : Icons.dark_mode,
+                  color: AppColors.textPrimary(context),
+                ),
+                tooltip: isDark ? 'Modo claro' : 'Modo oscuro',
+                onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+              );
+            },
+          ),
           IconButton(
-            icon: const Icon(Icons.sync, color: AppColors.textPrimary),
+            icon: Icon(Icons.sync, color: AppColors.textPrimary(context)),
             tooltip: 'Actualizar datos',
             onPressed: () {
               final user = ref.read(currentUserProvider);
@@ -137,15 +153,14 @@ class DashboardScreen extends ConsumerWidget {
                 const SnackBar(
                   content: Text('Actualizando datos...'),
                   duration: Duration(seconds: 2),
-                  backgroundColor: AppColors.primary,
                 ),
               );
             },
           ),
           IconButton(
             // icon de salir de la vista deslogarse
-            icon:
-                const Icon(Icons.logout_outlined, color: AppColors.textPrimary),
+            icon: Icon(Icons.logout_outlined,
+                color: AppColors.textPrimary(context)),
             onPressed: () {
               _showLogoutDialog(context, ref);
             },
@@ -162,7 +177,7 @@ class DashboardScreen extends ConsumerWidget {
               data: (stats) => StatCard(
                 title: AppStrings.dailyCollection,
                 amount: stats.dailyCollection,
-                subtitle: 'Recaudo de hoy (se reinicia a las 00:00)',
+                subtitle: 'Recaudo de hoy',
               ),
               loading: () => const StatCard(
                 title: AppStrings.dailyCollection,
@@ -182,25 +197,25 @@ class DashboardScreen extends ConsumerWidget {
               onTap: () {
                 context.push('/new-client');
               },
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppTheme.radiusControl),
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.person_add_outlined,
-                        color: Colors.white, size: 24),
+                    Icon(Icons.person_add_outlined,
+                        color: AppColors.onPrimary, size: 24),
                     const SizedBox(width: 12),
                     Text(AppStrings.newClient,
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: AppColors.onPrimary,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold)),
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -244,6 +259,14 @@ class DashboardScreen extends ConsumerWidget {
                   icon: Icons.point_of_sale_outlined,
                   onTap: () {
                     context.push('/cash-session/active');
+                  },
+                ),
+                DashboardCard(
+                  title: AppStrings.expenses,
+                  subtitle: AppStrings.expensesSubtitle,
+                  icon: Icons.receipt_long_outlined,
+                  onTap: () {
+                    context.push('/expenses');
                   },
                 ),
                 // DashboardCard(

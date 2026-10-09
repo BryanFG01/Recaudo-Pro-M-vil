@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/business_provider.dart';
 import '../../widgets/custom_button.dart';
@@ -28,7 +29,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    _loadRememberedNumber();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showSessionEndedNotice());
+  }
+
+  /// Si se llegó aquí porque la sesión venció o se revocó, se avisa una vez.
+  void _showSessionEndedNotice() {
+    if (!mounted || !ref.read(sessionEndedNoticeProvider)) return;
+    ref.read(sessionEndedNoticeProvider.notifier).state = false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Tu sesión terminó. Vuelve a iniciar sesión para continuar.')),
+    );
   }
 
   @override
@@ -38,43 +49,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  // Cargar credenciales guardadas
-  Future<void> _loadSavedCredentials() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedNumber = prefs.getString('saved_number');
-      final savedPassword = prefs.getString('saved_password');
-      final rememberMe = prefs.getBool('remember_credentials') ?? false;
-
-      if (rememberMe && savedNumber != null && savedPassword != null) {
-        setState(() {
-          _numberController.text = savedNumber;
-          _passwordController.text = savedPassword;
-          _rememberCredentials = true;
-        });
-      }
-    } catch (e) {
-      // Si hay error al cargar, continuar sin credenciales guardadas
-    }
+  /// Número recordado del último login (la contraseña nunca se guarda).
+  Future<void> _loadRememberedNumber() async {
+    final number = await ref.read(authRepositoryProvider).getRememberedNumber();
+    if (!mounted || number == null) return;
+    setState(() {
+      _numberController.text = number;
+      _rememberCredentials = true;
+    });
   }
 
-  // Guardar credenciales
-  Future<void> _saveCredentials() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      if (_rememberCredentials) {
-        await prefs.setString('saved_number', _numberController.text.trim());
-        await prefs.setString('saved_password', _passwordController.text);
-        await prefs.setBool('remember_credentials', true);
-      } else {
-        await prefs.remove('saved_number');
-        await prefs.remove('saved_password');
-        await prefs.setBool('remember_credentials', false);
-      }
-    } catch (e) {
-      // Si hay error al guardar, continuar sin guardar
-    }
-  }
+  Future<void> _saveRememberedNumber() => ref
+      .read(authRepositoryProvider)
+      .setRememberedNumber(_rememberCredentials ? _numberController.text.trim() : null);
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
@@ -114,8 +101,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
           return;
         }
-        // Guardar credenciales si el usuario marcó la opción
-        await _saveCredentials();
+        await _saveRememberedNumber();
+        if (!mounted) return;
         ref.read(currentUserProvider.notifier).setUser(user);
         context.go('/dashboard');
       } else if (mounted) {
@@ -147,10 +134,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final selectedBusiness = ref.watch(selectedBusinessProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) context.go('/business-selection');
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background(context),
+        body: SafeArea(
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Form(
             key: _formKey,
@@ -164,11 +156,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   height: 60,
                   decoration: BoxDecoration(
                     color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.account_balance_wallet,
-                    color: Colors.white,
+                    color: AppColors.onPrimary,
                     size: 30,
                   ),
                 ),
@@ -177,21 +169,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 if (selectedBusiness != null) ...[
                   Text(
                     selectedBusiness.name,
-                    style: const TextStyle(
-                      color: AppColors.primary,
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 8),
                 ],
                 // Welcome Text
-                const Text(
+                Text(
                   AppStrings.welcomeBack,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                  style: GoogleFonts.barlowCondensed(
+                    color: AppColors.textPrimary(context),
+                    fontSize: 36,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -199,8 +192,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   selectedBusiness != null
                       ? 'Inicia sesión en ${selectedBusiness.name}'
                       : AppStrings.loginSubtitle,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: AppColors.textSecondary(context),
                     fontSize: 16,
                   ),
                 ),
@@ -208,12 +201,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 16),
                 TextButton.icon(
                   onPressed: () => context.go('/business-selection'),
-                  icon: const Icon(Icons.business, color: AppColors.primary),
+                  icon: Icon(Icons.business, color: AppColors.textPrimary(context)),
                   label: Text(
                     selectedBusiness == null
                         ? 'Seleccionar negocio'
                         : 'Cambiar negocio',
-                    style: const TextStyle(color: AppColors.primary),
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 30),
@@ -244,7 +240,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       _obscurePassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined,
-                      color: AppColors.textSecondary,
+                      color: AppColors.textSecondary(context),
                     ),
                     onPressed: () {
                       setState(() => _obscurePassword = !_obscurePassword);
@@ -260,6 +256,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 12),
                 // Remember Credentials Checkbox
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Checkbox(
                       value: _rememberCredentials,
@@ -269,13 +266,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         });
                       },
                       activeColor: AppColors.primary,
-                      checkColor: Colors.white,
+                      checkColor: AppColors.onPrimary,
                     ),
-                    const Text(
-                      'Recordar número y contraseña',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 14,
+                    Expanded(
+                      child: Text(
+                        'Recordar mi número',
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -306,9 +306,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Center(
                   child: TextButton(
                     onPressed: () {},
-                    child: const Text(
+                    child: Text(
                       AppStrings.noAccount,
-                      style: TextStyle(color: AppColors.primary),
+                      style: TextStyle(color: AppColors.textSecondary(context)),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -317,6 +317,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

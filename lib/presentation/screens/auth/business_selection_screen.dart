@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../providers/business_provider.dart';
 import '../../widgets/custom_button.dart';
@@ -51,7 +53,7 @@ class _BusinessSelectionScreenState
     final businessesAsync = ref.watch(businessesProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppColors.background(context),
       body: SafeArea(
         child: Column(
           children: [
@@ -59,9 +61,9 @@ class _BusinessSelectionScreenState
             Align(
               alignment: Alignment.topRight,
               child: IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.help_outline,
-                  color: AppColors.textSecondary,
+                  color: AppColors.textSecondary(context),
                 ),
                 onPressed: () {
                   // TODO: Mostrar ayuda
@@ -80,22 +82,23 @@ class _BusinessSelectionScreenState
                       height: 80,
                       decoration: BoxDecoration(
                         color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.account_balance_wallet,
-                        color: Colors.white,
+                        color: AppColors.onPrimary,
                         size: 40,
                       ),
                     ),
                     const SizedBox(height: 24),
                     // App Name
-                    const Text(
+                    Text(
                       'RecaudoPro',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
+                      style: GoogleFonts.barlowCondensed(
+                        color: AppColors.textPrimary(context),
+                        fontSize: 40,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
                       ),
                     ),
                     const SizedBox(height: 48),
@@ -104,8 +107,8 @@ class _BusinessSelectionScreenState
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Text(
                         AppStrings.searchBusinessByNameOrNumber,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
                           fontSize: 16,
                         ),
                         textAlign: TextAlign.center,
@@ -117,17 +120,18 @@ class _BusinessSelectionScreenState
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: TextField(
                         controller: _searchController,
-                        style: const TextStyle(color: AppColors.textPrimary),
+                        style: TextStyle(color: AppColors.textPrimary(context)),
                         decoration: InputDecoration(
                           hintText: AppStrings.searchBusiness,
                           hintStyle:
-                              const TextStyle(color: AppColors.textSecondary),
-                          prefixIcon: const Icon(Icons.search,
-                              color: AppColors.textSecondary),
+                              TextStyle(color: AppColors.textSecondary(context)),
+                          prefixIcon: Icon(Icons.search,
+                              color: AppColors.textSecondary(context)),
                           filled: true,
-                          fillColor: AppColors.surface,
+                          fillColor: AppColors.surface(context),
                           border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusControl),
                             borderSide: BorderSide.none,
                           ),
                         ),
@@ -147,11 +151,11 @@ class _BusinessSelectionScreenState
                           }
 
                           if (businesses.isEmpty) {
-                            return const Center(
+                            return Center(
                               child: Text(
                                 'No se encontraron negocios',
                                 style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.textSecondary(context),
                                 ),
                               ),
                             );
@@ -169,11 +173,11 @@ class _BusinessSelectionScreenState
                           }).toList();
 
                           if (filteredBusinesses.isEmpty) {
-                            return const Center(
+                            return Center(
                               child: Text(
                                 'No se encontraron negocios',
                                 style: TextStyle(
-                                  color: AppColors.textSecondary,
+                                  color: AppColors.textSecondary(context),
                                 ),
                               ),
                             );
@@ -188,6 +192,8 @@ class _BusinessSelectionScreenState
                                   _selectedBusiness?.id == business.id;
 
                               return InkWell(
+                                borderRadius:
+                                    BorderRadius.circular(AppTheme.radiusCard),
                                 onTap: () {
                                   setState(() {
                                     _selectedBusiness = business;
@@ -199,15 +205,9 @@ class _BusinessSelectionScreenState
                                   decoration: BoxDecoration(
                                     color: isSelected
                                         ? AppColors.primary
-                                        : AppColors.surface,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? AppColors.primary
-                                          : AppColors.textSecondary
-                                              .withOpacity(0.2),
-                                      width: isSelected ? 2 : 1,
-                                    ),
+                                        : AppColors.surface(context),
+                                    borderRadius: BorderRadius.circular(
+                                        AppTheme.radiusCard),
                                   ),
                                   child: Row(
                                     children: [
@@ -216,10 +216,10 @@ class _BusinessSelectionScreenState
                                         height: 50,
                                         decoration: BoxDecoration(
                                           color: isSelected
-                                              ? Colors.white
-                                              : AppColors.primary,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
+                                              ? AppColors.onPrimary
+                                              : AppColors.mint,
+                                          borderRadius: BorderRadius.circular(
+                                              AppTheme.radiusControl),
                                         ),
                                         child: Center(
                                           child: Text(
@@ -227,7 +227,7 @@ class _BusinessSelectionScreenState
                                             style: TextStyle(
                                               color: isSelected
                                                   ? AppColors.primary
-                                                  : Colors.white,
+                                                  : AppColors.carbon,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 12,
                                             ),
@@ -244,10 +244,10 @@ class _BusinessSelectionScreenState
                                               business.name,
                                               style: TextStyle(
                                                 color: isSelected
-                                                    ? Colors.white
-                                                    : AppColors.textPrimary,
+                                                    ? AppColors.onPrimary
+                                                    : AppColors.textPrimary(context),
                                                 fontSize: 16,
-                                                fontWeight: FontWeight.bold,
+                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
                                             if (business.description != null)
@@ -255,8 +255,9 @@ class _BusinessSelectionScreenState
                                                 business.description!,
                                                 style: TextStyle(
                                                   color: isSelected
-                                                      ? Colors.white70
-                                                      : AppColors.textSecondary,
+                                                      ? AppColors.onPrimary
+                                                          .withValues(alpha: 0.7)
+                                                      : AppColors.textSecondary(context),
                                                   fontSize: 12,
                                                 ),
                                                 maxLines: 1,
@@ -266,9 +267,9 @@ class _BusinessSelectionScreenState
                                         ),
                                       ),
                                       if (isSelected)
-                                        const Icon(
+                                        Icon(
                                           Icons.check_circle,
-                                          color: Colors.white,
+                                          color: AppColors.onPrimary,
                                         ),
                                     ],
                                   ),

@@ -18,5 +18,14 @@ abstract class ClientRepository {
     String? userNumber,
   });
   Future<ClientEntity> updateClient(ClientEntity client);
+
+  /// Crea una nueva versión del cliente preservando el registro original.
+  Future<ClientEntity> versionClient(
+    ClientEntity client, {
+    String? businessId,
+    String? businessCode,
+    String? userId,
+    String? userNumber,
+  });
 }
 
