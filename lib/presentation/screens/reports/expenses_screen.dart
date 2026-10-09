@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/constants/expense_categories.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/thousands_separator_input_formatter.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
@@ -169,7 +170,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         ),
         decoration: BoxDecoration(
           color: AppColors.surface(ctx),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: const BorderRadius.vertical(
+            top: Radius.circular(AppTheme.radiusCard),
+          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -179,7 +182,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: AppColors.textSecondary(ctx).withOpacity(0.4),
+                color: AppColors.textSecondary(ctx).withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -190,7 +193,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 style: TextStyle(
                   color: AppColors.textPrimary(ctx),
                   fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -203,13 +206,17 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   final cat = expenseCategories[index];
                   final isSelected = _selectedCategoryId == cat.id;
                   return Material(
-                    color: Colors.transparent,
+                    color: isSelected
+                        ? AppColors.surfaceLight(context)
+                        : Colors.transparent,
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.radiusControl),
                     child: InkWell(
                       onTap: () {
                         setState(() => _selectedCategoryId = cat.id);
                         Navigator.of(ctx).pop();
                       },
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           vertical: 12,
@@ -217,10 +224,23 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                         ),
                         child: Row(
                           children: [
-                            Icon(
-                              cat.icon,
-                              size: 22,
-                              color: AppColors.primary,
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppColors.mint
+                                    : AppColors.surfaceLight(context),
+                                borderRadius: BorderRadius.circular(
+                                    AppTheme.radiusControl),
+                              ),
+                              child: Icon(
+                                cat.icon,
+                                size: 20,
+                                color: isSelected
+                                    ? AppColors.carbon
+                                    : AppColors.textPrimary(context),
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -256,7 +276,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 color: AppColors.surface(ctx),
                 border: Border(
                   top: BorderSide(
-                    color: AppColors.textSecondary(ctx).withOpacity(0.2),
+                    color: AppColors.divider(ctx),
                   ),
                 ),
               ),
@@ -265,8 +285,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                 children: [
                   Icon(
                     Icons.keyboard_arrow_down,
-                    size: 28,
-                    color: AppColors.primary,
+                    size: 24,
+                    color: AppColors.textSecondary(ctx),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -302,7 +322,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
@@ -323,17 +343,38 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: AppColors.primary.withOpacity(0.3), width: 1),
+                  color: AppColors.surface(context),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                 ),
-                child: Text(
-                  AppStrings.expenseInfoMessage,
-                  style: TextStyle(
-                    color: AppColors.textPrimary(context),
-                    fontSize: 14,
-                  ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.mint,
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusControl),
+                      ),
+                      child: const Icon(
+                        Icons.info_outline,
+                        size: 20,
+                        color: AppColors.carbon,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        AppStrings.expenseInfoMessage,
+                        style: TextStyle(
+                          color: AppColors.textPrimary(context),
+                          fontSize: 14,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 24),
@@ -378,13 +419,13 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
               const SizedBox(height: 8),
               InkWell(
                 onTap: () => _showCategoryPicker(context),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                 child: InputDecorator(
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: AppColors.surface(context),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                       borderSide: BorderSide.none,
                     ),
                     contentPadding: const EdgeInsets.symmetric(
@@ -403,7 +444,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                             Icons.category_outlined,
                         size: 22,
                         color: _findCategory(_safeDropdownValue) != null
-                            ? AppColors.primary
+                            ? AppColors.textPrimary(context)
                             : AppColors.textSecondary(context),
                       ),
                       const SizedBox(width: 12),

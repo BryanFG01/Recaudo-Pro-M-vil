@@ -1,21 +1,16 @@
-/// Configuración de la API del backend.
-/// Base URL desde .env (BASE_BACK) o valor por defecto.
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+/// Configuración de la API del backend. La URL base sale de BASE_BACK en .env
+/// (ej. https://api.recaudopro.cloud, o http://10.0.2.2:3001 para el emulador de Android en local).
 class ApiConfig {
-  static const String _defaultBaseUrl =
-      'https://recaudo-pro-back-production.up.railway.app';
-
+  /// Sin valor por defecto a propósito: si falta BASE_BACK es mejor un error claro que
+  /// conectarse en silencio a un backend equivocado.
   static String get baseUrl {
-    try {
-      final fromEnv = dotenv.env['BASE_BACK']?.trim();
-      if (fromEnv != null && fromEnv.isNotEmpty) {
-        return fromEnv.endsWith('/')
-            ? fromEnv.substring(0, fromEnv.length - 1)
-            : fromEnv;
-      }
-    } catch (_) {}
-    return _defaultBaseUrl;
+    final fromEnv = dotenv.isInitialized ? dotenv.env['BASE_BACK']?.trim() : null;
+    if (fromEnv == null || fromEnv.isEmpty) {
+      throw StateError('BASE_BACK no está configurada en .env');
+    }
+    return fromEnv.endsWith('/') ? fromEnv.substring(0, fromEnv.length - 1) : fromEnv;
   }
 
   /// Arma la URL final para un endpoint (sin query string).

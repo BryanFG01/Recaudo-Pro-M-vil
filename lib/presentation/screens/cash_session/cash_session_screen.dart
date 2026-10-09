@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/thousands_separator_input_formatter.dart';
 import '../../../domain/entities/cash_session_entity.dart';
 import '../../../domain/entities/cash_session_flow_entity.dart';
@@ -19,7 +20,8 @@ import '../../providers/credit_provider.dart';
 import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import '../../widgets/stat_card.dart';
+import '../../widgets/stat_card.dart';
+import '../../../core/utils/currency_format.dart';
 
 class CashSessionScreen extends ConsumerStatefulWidget {
   final String sessionId;
@@ -188,7 +190,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             style: TextStyle(
               color: AppColors.textPrimary(context),
               fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
@@ -216,7 +218,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -287,9 +289,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                       cajaActualLoading: dailySummaryAsync?.isLoading ?? false,
                     );
                   },
-                  loading: () => const Center(
+                  loading: () => Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
                       child:
                           CircularProgressIndicator(color: AppColors.primary),
                     ),
@@ -321,9 +323,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                       withdrawalsAsync,
                     );
                   },
-                  loading: () => const Center(
+                  loading: () => Center(
                     child: Padding(
-                      padding: EdgeInsets.all(24),
+                      padding: const EdgeInsets.all(24),
                       child:
                           CircularProgressIndicator(color: AppColors.primary),
                     ),
@@ -409,9 +411,8 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.error.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.error.withOpacity(0.3)),
+              color: AppColors.error.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppTheme.radiusControl),
             ),
             child: const Row(
               children: [
@@ -432,7 +433,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             style: TextStyle(
               color: AppColors.textPrimary(context),
               fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 12),
@@ -542,36 +543,51 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
   /// Una sola card en Retiros: Caja actual (inicial + recaudo - retiros - ventas).
   Widget _buildCajaActualCard(double amount, {bool isLoading = false}) {
     final aFavor = amount >= 0;
+    // Tarjeta invertida (como StatCard): es el dato clave de la pantalla.
+    final foreground = AppColors.onPrimary;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color:
-              (aFavor ? AppColors.success : AppColors.error).withOpacity(0.5),
-          width: 1.5,
-        ),
+        color: AppColors.primary,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Caja actual',
-            style: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.mint,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  size: 22,
+                  color: AppColors.carbon,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Caja actual',
+                style: TextStyle(
+                  color: foreground.withValues(alpha: 0.7),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 20),
           if (isLoading)
-            const SizedBox(
+            SizedBox(
               height: 36,
               width: 36,
               child: CircularProgressIndicator(
-                color: AppColors.primary,
+                color: AppColors.onPrimary,
                 strokeWidth: 2,
               ),
             )
@@ -579,17 +595,20 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             Text(
               '${aFavor ? '' : '-'}\$ ${NumberFormat('#,###.##', 'es').format(aFavor ? amount : -amount)}',
               style: TextStyle(
-                color: aFavor ? AppColors.success : AppColors.error,
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
+                // En negativo se conserva el rojo: indica caja en contra.
+                color: aFavor ? foreground : AppColors.error,
+                fontSize: 34,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.5,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           const SizedBox(height: 4),
           Text(
-            'Caja inicial + Recaudo - Retiros - Ventas',
+            'Caja inicial + recaudo - retiros - ventas',
             style: TextStyle(
-              color: AppColors.textSecondary(context),
-              fontSize: 12,
+              color: foreground.withValues(alpha: 0.6),
+              fontSize: 13,
             ),
           ),
         ],
@@ -604,13 +623,12 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.warning.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.warning.withOpacity(0.5)),
+        color: AppColors.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: AppColors.warning, size: 24),
+          const Icon(Icons.info_outline, color: AppColors.warning, size: 22),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -638,7 +656,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             style: TextStyle(
               color: AppColors.textPrimary(context),
               fontSize: 18,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
         if (!isRetirosView) const SizedBox(height: 12),
@@ -666,9 +684,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
               ],
             );
           },
-          loading: () => const Center(
+          loading: () => Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: CircularProgressIndicator(color: AppColors.primary),
             ),
           ),
@@ -691,8 +709,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.warning.withOpacity(0.5)),
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
         ),
         child: Text(
           AppStrings.noActiveCashSession,
@@ -721,7 +738,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 12),
@@ -770,7 +787,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         const SizedBox(height: 12),
@@ -788,9 +805,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
               ],
             );
           },
-          loading: () => const Center(
+          loading: () => Center(
             child: Padding(
-              padding: EdgeInsets.all(24),
+              padding: const EdgeInsets.all(24),
               child: CircularProgressIndicator(color: AppColors.primary),
             ),
           ),
@@ -840,7 +857,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
         ),
         child: Center(
           child: Text(
@@ -850,7 +867,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
         ),
       );
     }
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final formatter = AppCurrency.formatter;
     return Column(
       children: list.map((w) {
         return Container(
@@ -858,13 +875,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: w.isApproved
-                  ? AppColors.success.withOpacity(0.5)
-                  : AppColors.warning.withOpacity(0.5),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           ),
           child: Row(
             children: [
@@ -877,7 +888,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                       style: TextStyle(
                         color: AppColors.textPrimary(context),
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -904,9 +915,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: w.isApproved
-                      ? AppColors.success.withOpacity(0.2)
-                      : AppColors.warning.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                      ? AppColors.success.withValues(alpha: 0.15)
+                      : AppColors.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   w.isApproved

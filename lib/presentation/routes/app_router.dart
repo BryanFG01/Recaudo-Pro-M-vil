@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../providers/auth_provider.dart';
 import '../screens/auth/business_selection_screen.dart';
 import '../screens/auth/game_intro_screen.dart';
 import '../screens/auth/login_screen.dart';
@@ -15,11 +18,30 @@ import '../screens/reports/expenses_report_screen.dart';
 import '../screens/reports/expenses_screen.dart';
 import '../screens/cash_session/cash_session_screen.dart';
 import '../screens/reports/withdrawals_report_screen.dart';
+import 'auth_redirect.dart';
+
+/// Router de la app. Se reevalúa cuando cambia la sesión: sin sesión, las pantallas
+/// protegidas llevan al login (también cuando la sesión vence o se revoca desde el panel).
+final routerProvider = Provider<GoRouter>((ref) {
+  final sessionChanged = ValueNotifier<int>(0);
+  ref.listen(currentUserProvider, (_, __) => sessionChanged.value++);
+  ref.listen(authRestoredProvider, (_, __) => sessionChanged.value++);
+  ref.onDispose(sessionChanged.dispose);
+
+  return GoRouter(
+    initialLocation: '/game-intro',
+    refreshListenable: sessionChanged,
+    redirect: (context, state) => authRedirect(
+      location: state.matchedLocation,
+      isRestored: ref.read(authRestoredProvider),
+      isLoggedIn: ref.read(currentUserProvider) != null,
+    ),
+    routes: AppRouter.routes,
+  );
+});
 
 class AppRouter {
-  static final GoRouter router = GoRouter(
-    initialLocation: '/game-intro',
-    routes: [
+  static final List<RouteBase> routes = [
       GoRoute(
         path: '/game-intro',
         name: 'game-intro',
@@ -121,6 +143,5 @@ class AppRouter {
           return CashSessionScreen(sessionId: sessionId);
         },
       ),
-    ],
-  );
+  ];
 }

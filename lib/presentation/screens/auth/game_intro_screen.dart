@@ -1,7 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../widgets/custom_button.dart';
 
 class GameIntroScreen extends StatefulWidget {
@@ -116,25 +118,14 @@ class _GameIntroScreenState extends State<GameIntroScreen>
                 child: Container(
                   width: coin.size,
                   height: coin.size,
-                  decoration: BoxDecoration(
-                    color: AppColors.accent,
+                  decoration: const BoxDecoration(
+                    color: AppColors.mint,
                     shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.6),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.accent.withOpacity(0.4),
-                        blurRadius: 10,
-                        spreadRadius: 2,
-                      ),
-                    ],
                   ),
                   child: Center(
                     child: Icon(
                       Icons.monetization_on,
-                      color: Colors.white,
+                      color: AppColors.carbon,
                       size: coin.size * 0.65,
                     ),
                   ),
@@ -165,18 +156,11 @@ class _GameIntroScreenState extends State<GameIntroScreen>
                     height: 120,
                     decoration: BoxDecoration(
                       color: AppColors.primary,
-                      borderRadius: BorderRadius.circular(30),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.5),
-                          blurRadius: 30,
-                          spreadRadius: 10,
-                        ),
-                      ],
+                      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.account_balance_wallet,
-                      color: Colors.white,
+                      color: AppColors.onPrimary,
                       size: 60,
                     ),
                   ),
@@ -187,16 +171,16 @@ class _GameIntroScreenState extends State<GameIntroScreen>
             // Título del juego
             Text(
               'RecaudoPro',
-              style: TextStyle(
+              style: GoogleFonts.barlowCondensed(
                 color: AppColors.textPrimary(context),
-                fontSize: 42,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 2,
+                fontSize: 48,
+                fontWeight: FontWeight.w700,
+                height: 1,
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'Recolector de Monedas',
+              'Recolector de monedas',
               style: TextStyle(
                 color: AppColors.textSecondary(context),
                 fontSize: 20,
@@ -209,21 +193,13 @@ class _GameIntroScreenState extends State<GameIntroScreen>
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppColors.surface(context),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.primary.withOpacity(0.3),
-                  width: 2,
-                ),
+                borderRadius: BorderRadius.circular(AppTheme.radiusCard),
               ),
               child: Column(
                 children: [
                   Row(
                     children: [
-                      Icon(
-                        Icons.touch_app,
-                        color: AppColors.primary,
-                        size: 24,
-                      ),
+                      _buildInstructionIcon(Icons.touch_app),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -239,11 +215,7 @@ class _GameIntroScreenState extends State<GameIntroScreen>
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Icon(
-                        Icons.timer,
-                        color: AppColors.accent,
-                        size: 24,
-                      ),
+                      _buildInstructionIcon(Icons.timer),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -262,13 +234,25 @@ class _GameIntroScreenState extends State<GameIntroScreen>
             const SizedBox(height: 48),
             // Botón Jugar
             CustomButton(
-              text: '🎮 JUGAR',
+              text: 'Jugar',
               onPressed: _goToBusinessSelection,
-              backgroundColor: AppColors.accent,
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Chip mint con el icono de cada instrucción.
+  Widget _buildInstructionIcon(IconData icon) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.mint,
+        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+      ),
+      child: Icon(icon, color: AppColors.carbon, size: 22),
     );
   }
 }

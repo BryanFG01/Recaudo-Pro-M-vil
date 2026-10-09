@@ -5,15 +5,12 @@ import '../../data/repositories/cash_session_repository_impl.dart';
 import '../../domain/entities/cash_session_entity.dart';
 import '../../domain/entities/cash_session_flow_entity.dart';
 import '../../domain/entities/daily_summary_by_user_entity.dart';
-import '../../domain/entities/daily_summary_entity.dart';
 import '../../domain/entities/withdrawal_entity.dart';
 import '../../domain/entities/withdrawals_data_entity.dart';
 import '../../domain/usecases/cash_session/create_withdrawal_usecase.dart';
-import '../../domain/usecases/cash_session/get_active_cash_session_usecase.dart';
 import '../../domain/usecases/cash_session/get_cash_session_by_user_id_usecase.dart';
 import '../../domain/usecases/cash_session/get_cash_session_flow_usecase.dart';
 import '../../domain/usecases/cash_session/get_cash_session_usecase.dart';
-import '../../domain/usecases/cash_session/get_daily_summary_usecase.dart';
 import '../../domain/usecases/cash_session/get_withdrawals_by_user_usecase.dart';
 
 final cashSessionRemoteDataSourceProvider =
@@ -29,11 +26,6 @@ final cashSessionRepositoryProvider =
 
 final getCashSessionUseCaseProvider = Provider<GetCashSessionUseCase>((ref) {
   return GetCashSessionUseCase(ref.watch(cashSessionRepositoryProvider));
-});
-
-final getActiveCashSessionUseCaseProvider =
-    Provider<GetActiveCashSessionUseCase>((ref) {
-  return GetActiveCashSessionUseCase(ref.watch(cashSessionRepositoryProvider));
 });
 
 final getCashSessionByUserIdUseCaseProvider =
@@ -52,10 +44,6 @@ final createWithdrawalUseCaseProvider =
   return CreateWithdrawalUseCase(ref.watch(cashSessionRepositoryProvider));
 });
 
-final getDailySummaryUseCaseProvider = Provider<GetDailySummaryUseCase>((ref) {
-  return GetDailySummaryUseCase(ref.watch(cashSessionRepositoryProvider));
-});
-
 final getWithdrawalsByUserUseCaseProvider =
     Provider<GetWithdrawalsByUserUseCase>((ref) {
   return GetWithdrawalsByUserUseCase(ref.watch(cashSessionRepositoryProvider));
@@ -66,13 +54,6 @@ final cashSessionProvider =
     FutureProvider.family<CashSessionEntity?, String>((ref, sessionId) async {
   final useCase = ref.watch(getCashSessionUseCaseProvider);
   return useCase(sessionId);
-});
-
-/// Sesión activa del usuario (GET /api/cash-sessions/active?user_id=...). 404 → null.
-final activeCashSessionProvider =
-    FutureProvider.family<CashSessionEntity?, String>((ref, userId) async {
-  final useCase = ref.watch(getActiveCashSessionUseCaseProvider);
-  return useCase(userId);
 });
 
 /// Sesión de caja del usuario para pintar saldo inicial (GET /api/cash-sessions/user/{userId}). 404 → null.
@@ -106,15 +87,6 @@ final FutureProviderFamily<WithdrawalsDataEntity, String>
   final useCase = ref.watch(getWithdrawalsByUserUseCaseProvider);
   final result = await useCase(userId);
   return result;
-});
-
-/// Resumen diario de caja (GET /api/cash-sessions/daily-summary/{sessionId}).
-/// Devuelve total_recaudo, total_ventas, total_retiros, total_gastos y caja_actual calculados por el backend.
-final dailySummaryProvider =
-    FutureProvider.family<DailySummaryEntity?, String>((ref, sessionId) async {
-  if (sessionId.isEmpty) return null;
-  final useCase = ref.watch(getDailySummaryUseCaseProvider);
-  return useCase(sessionId);
 });
 
 /// Resumen diario por usuario para reportes (GET /api/cash-sessions/daily-summary/user/{userId}).

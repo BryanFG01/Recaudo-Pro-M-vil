@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../../core/config/api_config.dart';
+import 'api_client.dart';
 import '../../domain/entities/client_entity.dart';
 import '../models/client_model.dart';
 
@@ -39,6 +40,8 @@ abstract class ClientRemoteDataSource {
 }
 
 class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
+  final ApiClient _api = ApiClient.instance;
+
   @override
   Future<String?> uploadDocumentFile(File file, {String? businessId}) async {
     if (!file.existsSync()) {
@@ -49,7 +52,6 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       throw Exception('El archivo de la foto está vacío');
     }
     final uri = Uri.parse(ApiConfig.buildApiUrl('/api/upload/image'));
-    final request = http.MultipartRequest('POST', uri);
     String fileName = file.path.split(RegExp(r'[/\\]')).last;
     final lower = fileName.toLowerCase();
     final bool isPng = lower.endsWith('.png');
@@ -60,17 +62,14 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
     }
     final contentType =
         isPng ? MediaType('image', 'png') : MediaType('image', 'jpeg');
-    request.files.add(http.MultipartFile.fromBytes(
-      'file',
-      bytes,
-      filename: fileName,
-      contentType: contentType,
-    ));
-    if (businessId != null && businessId.isNotEmpty) {
-      request.fields['business_id'] = businessId;
-    }
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    // Se arma en una función: si hay que renovar la sesión, el cliente la reenvía desde cero
+    final response = await _api.send(() => http.MultipartRequest('POST', uri)
+      ..files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: fileName,
+        contentType: contentType,
+      )));
     if (response.statusCode != 200 && response.statusCode != 201) {
       String msg = 'Error ${response.statusCode}';
       try {
@@ -121,7 +120,7 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       String businessId, String userId) async {
     final url = ApiConfig.buildApiUrlWithQuery(
         '/api/clients/business/$businessId', {'user_id': userId});
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception('Error al obtener clientes: ${response.statusCode}');
     }
@@ -134,7 +133,7 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
   @override
   Future<ClientEntity?> getClientById(String id) async {
     final url = ApiConfig.buildApiUrl('/api/clients/$id');
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
       throw Exception('Error al obtener cliente: ${response.statusCode}');
@@ -192,7 +191,7 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       'user_number': userNumber,
     };
     debugPrint('Create Client Request Body: ${jsonEncode(body)}');
-    final response = await http.post(
+    final response = await _api.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -241,7 +240,7 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
       'longitude': client.longitude,
     };
     debugPrint('Update Client Request Body: ${jsonEncode(body)}');
-    final response = await http.patch(
+    final response = await _api.patch(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -293,7 +292,7 @@ class ClientRemoteDataSourceImpl implements ClientRemoteDataSource {
     if (userId != null) body['user_id'] = userId;
     if (userNumber != null) body['user_number'] = userNumber;
     debugPrint('Version Client Request Body: ${jsonEncode(body)}');
-    final response = await http.post(
+    final response = await _api.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),

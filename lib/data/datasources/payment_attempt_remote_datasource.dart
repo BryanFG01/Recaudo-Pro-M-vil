@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
+import 'api_client.dart';
 import '../../domain/entities/payment_attempt_entity.dart';
 
 /// POST /api/payment-attempts (status PAID o NOT_PAID).
@@ -37,6 +37,8 @@ abstract class PaymentAttemptRemoteDataSource {
 
 class PaymentAttemptRemoteDataSourceImpl
     implements PaymentAttemptRemoteDataSource {
+  final ApiClient _api = ApiClient.instance;
+
   @override
   Future<PaymentAttemptEntity> createPaymentAttempt({
     required String creditId,
@@ -68,7 +70,7 @@ class PaymentAttemptRemoteDataSourceImpl
     if (collectionId != null && collectionId.isNotEmpty) {
       body['collection_id'] = collectionId;
     }
-    final response = await http.post(
+    final response = await _api.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -107,7 +109,7 @@ class PaymentAttemptRemoteDataSourceImpl
     if (userId != null && userId.isNotEmpty) query['user_id'] = userId;
     if (status != null && status.isNotEmpty) query['status'] = status;
     final url = ApiConfig.buildApiUrlWithQuery('/api/payment-attempts', query);
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception(
           'Error al obtener intentos de pago: ${response.statusCode}');
@@ -124,7 +126,7 @@ class PaymentAttemptRemoteDataSourceImpl
       String creditId) async {
     final url = ApiConfig.buildApiUrl('/api/payment-attempts/credit/$creditId');
     debugPrint('[PaymentAttempts] GET $url');
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     debugPrint('[PaymentAttempts] status=${response.statusCode} body=${response.body.length > 500 ? response.body.substring(0, 500) : response.body}');
     if (response.statusCode != 200) {
       debugPrint('[PaymentAttempts] Error: status ${response.statusCode}');

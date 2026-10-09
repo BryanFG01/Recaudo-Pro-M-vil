@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_colors.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
+
+/// Botón principal (Filled Dark Button de DESIGN.MD): plano, ancho completo.
 class CustomButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -19,30 +22,34 @@ class CustomButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final foreground = textColor ?? AppColors.onPrimary;
+
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 52,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: backgroundColor ?? AppColors.primary,
+          foregroundColor: foreground,
+          elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppTheme.radiusControl),
           ),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  valueColor: AlwaysStoppedAnimation<Color>(foreground),
                 ),
               )
             : Text(
                 text,
                 style: TextStyle(
-                  color: textColor ?? Colors.white,
+                  color: foreground,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                 ),
@@ -51,4 +58,3 @@ class CustomButton extends StatelessWidget {
     );
   }
 }
-

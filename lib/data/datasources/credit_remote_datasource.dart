@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
+import 'api_client.dart';
 import '../../domain/entities/credit_entity.dart';
 import '../../domain/entities/credit_summary_entity.dart';
 import '../models/credit_model.dart';
@@ -33,11 +33,13 @@ abstract class CreditRemoteDataSource {
 }
 
 class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
+  final ApiClient _api = ApiClient.instance;
+
   @override
   Future<List<CreditEntity>> getCreditsByBusiness(String businessId) async {
     final url = ApiConfig.buildApiUrlWithQuery(
         '/api/credits', {'business_id': businessId});
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception('Error al obtener créditos: ${response.statusCode}');
     }
@@ -50,7 +52,7 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
   @override
   Future<CreditEntity?> getCreditById(String id) async {
     final url = ApiConfig.buildApiUrl('/api/credits/$id');
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
       throw Exception('Error al obtener crédito: ${response.statusCode}');
@@ -65,7 +67,7 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
   @override
   Future<CreditSummaryEntity?> getCreditSummaryById(String creditId) async {
     final url = ApiConfig.buildApiUrl('/api/credits/summary/$creditId');
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode == 404) return null;
     if (response.statusCode != 200) {
       throw Exception(
@@ -115,7 +117,7 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
       '/api/credits/summary',
       {'business_id': businessId, 'user_id': userId},
     );
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception(
           'Error al obtener resúmenes de créditos: ${response.statusCode}');
@@ -170,7 +172,7 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
       body['cash_session_id'] = cashSessionId;
     }
     debugPrint('Create Credit Request Body: ${jsonEncode(body)}');
-    final response = await http.post(
+    final response = await _api.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),
@@ -246,7 +248,7 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
       updateData['total_interest'] = credit.totalInterest;
     }
     debugPrint('Update Credit Request Body: ${jsonEncode(updateData)}');
-    final response = await http.patch(
+    final response = await _api.patch(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(updateData),

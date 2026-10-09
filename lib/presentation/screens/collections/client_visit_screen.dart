@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/business_helper.dart';
 import '../../../core/utils/thousands_separator_input_formatter.dart';
 import '../../providers/auth_provider.dart';
@@ -23,7 +24,8 @@ import '../../providers/credit_provider.dart';
 import '../../providers/payment_attempt_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import '../../widgets/print_preview_dialog.dart';
+import '../../widgets/print_preview_dialog.dart';
+import '../../../core/utils/currency_format.dart';
 
 const _uuid = Uuid();
 
@@ -444,7 +446,6 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         ref.invalidate(cashSessionFlowProvider);
         ref.invalidate(withdrawalsByUserProvider);
         ref.invalidate(cashSessionByUserProvider);
-        ref.invalidate(activeCashSessionProvider);
 
         // Marcar crédito con acción hoy: en Mi cartera la card se esconde y reaparece al filtrar (Pagaron/No pagaron) o al otro día
         final set = ref.read(creditsWithActionTodayProvider);
@@ -545,7 +546,6 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         ref.invalidate(cashSessionFlowProvider);
         ref.invalidate(withdrawalsByUserProvider);
         ref.invalidate(cashSessionByUserProvider);
-        ref.invalidate(activeCashSessionProvider);
       }
 
       // Obtener intentos previos para calcular accumulated_no_payment_days
@@ -584,8 +584,11 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No pago registrado'),
+          SnackBar(
+            content: Text(
+              'No pago registrado',
+              style: TextStyle(color: AppColors.onPrimary),
+            ),
             backgroundColor: AppColors.primary,
           ),
         );
@@ -616,11 +619,11 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
           onPressed: () => context.pop(),
         ),
         title: Text(
-          'Visita Cliente y Recaudo',
+          'Visita y recaudo',
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
@@ -715,7 +718,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                 });
               }
               final formatter =
-                  NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+                  AppCurrency.formatter;
               final dateFormatter = DateFormat('yyyy/MM/dd');
 
               return SingleChildScrollView(
@@ -729,7 +732,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       style: TextStyle(
                         color: AppColors.textPrimary(context),
                         fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -785,12 +788,21 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           label: const Text(AppStrings.locate),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.onPrimary,
+                            elevation: 0,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
+                              horizontal: 16,
+                              vertical: 10,
                             ),
-                            textStyle: const TextStyle(fontSize: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
+                            ),
+                            textStyle: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -804,7 +816,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: AppColors.surface(context),
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusCard,
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,7 +827,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                   AppStrings.remainingLoanAmount,
                                   style: TextStyle(
                                     color: AppColors.textSecondary(context),
-                                    fontSize: 12,
+                                    fontSize: 13,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
@@ -821,8 +835,11 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                   formatter.format(effectiveBalance),
                                   style: TextStyle(
                                     color: AppColors.textPrimary(context),
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -830,7 +847,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                   '${AppStrings.total}: ${formatter.format(credit.totalToPay)}',
                                   style: TextStyle(
                                     color: AppColors.textSecondary(context),
-                                    fontSize: 11,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
@@ -843,25 +860,32 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusCard,
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
+                                Text(
                                   AppStrings.installmentAmount,
                                   style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
+                                    color: AppColors.onPrimary.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                    fontSize: 13,
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
                                   formatter.format(credit.installmentAmount),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
+                                  style: TextStyle(
+                                    color: AppColors.onPrimary,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -877,7 +901,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       style: TextStyle(
                         color: AppColors.textPrimary(context),
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -886,29 +910,35 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                       value: _paymentMethod,
                       dropdownColor:
                           AppColors.surface(context), // Background for the menu
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.radiusControl),
                       style: TextStyle(
                           color: AppColors.textPrimary(
                               context)), // Text color for items
                       decoration: InputDecoration(
-                        labelText: 'Método de Pago',
+                        labelText: 'Método de pago',
                         labelStyle:
                             TextStyle(color: AppColors.textSecondary(context)),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusControl),
                           borderSide: BorderSide.none,
                         ),
                         filled: true,
-                        fillColor: AppColors.surface(context),
+                        fillColor: AppColors.surfaceLight(context),
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusControl),
                           borderSide: BorderSide.none,
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                              color: AppColors.primary, width: 2),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusControl),
+                          borderSide: BorderSide(
+                              color: AppColors.textPrimary(context),
+                              width: 1.5),
                         ),
                       ),
                       items: ['Efectivo', 'Transacción'].map((method) {
@@ -929,7 +959,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     // Transaction Number Input (if applicable)
                     if (_paymentMethod == 'Transacción') ...[
                       CustomTextField(
-                        label: 'Número de Comprobante',
+                        label: 'Número de comprobante',
                         hint: 'Ingrese el número de transacción',
                         prefixIcon: Icons.receipt,
                         controller: _transactionController,
@@ -943,7 +973,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                         Text(
                           AppStrings.paymentAmount,
                           style: TextStyle(
-                            color: AppColors.textPrimary(context),
+                            color: AppColors.textSecondary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -955,8 +985,10 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly,
                           ],
-                          style:
-                              TextStyle(color: AppColors.textPrimary(context)),
+                          style: TextStyle(
+                            color: AppColors.textPrimary(context),
+                            fontSize: 16,
+                          ),
                           decoration: InputDecoration(
                             hintText: AppStrings.enterSpecificAmount,
                             hintStyle: TextStyle(
@@ -964,24 +996,29 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                             prefixIcon: Icon(Icons.attach_money,
                                 color: AppColors.textSecondary(context)),
                             filled: true,
-                            fillColor: AppColors.surface(context),
+                            fillColor: AppColors.surfaceLight(context),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusControl),
                               borderSide: BorderSide.none,
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusControl),
                               borderSide: BorderSide.none,
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(
-                                  color: AppColors.primary, width: 2),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusControl),
+                              borderSide: BorderSide(
+                                  color: AppColors.textPrimary(context),
+                                  width: 1.5),
                             ),
                             errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(
+                                  AppTheme.radiusControl),
                               borderSide: const BorderSide(
-                                  color: AppColors.error, width: 2),
+                                  color: AppColors.error, width: 1.5),
                             ),
                           ),
                         ),
@@ -1044,8 +1081,10 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.error,
                           foregroundColor: Colors.white,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusControl),
                           ),
                         ),
                       ),
@@ -1060,7 +1099,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                           style: TextStyle(
                             color: AppColors.textPrimary(context),
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         IconButton(
@@ -1081,7 +1120,8 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                         padding: const EdgeInsets.all(24),
                         decoration: BoxDecoration(
                           color: AppColors.surface(context),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusCard),
                         ),
                         child: Center(
                           child: Text(
@@ -1096,16 +1136,20 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     else
                       Container(
                         height: 300, // Altura fija para habilitar scroll
+                        clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
                           color: AppColors.surface(context),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusCard),
                         ),
                         child: ListView.separated(
                           physics: const BouncingScrollPhysics(),
                           itemCount: collections.length,
                           separatorBuilder: (context, index) => Divider(
                             height: 1,
-                            color: AppColors.textSecondary(context),
+                            indent: 16,
+                            endIndent: 16,
+                            color: AppColors.divider(context),
                           ),
                           itemBuilder: (context, index) {
                             final collection = collections[index];
@@ -1153,6 +1197,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                       color: AppColors.textPrimary(context),
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -1169,7 +1216,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
           // Overlay de carga mientras se refresca
           if (_isRefreshing || _isLoadingPayment || _isLoadingFullPayment)
             Container(
-              color: Colors.black.withOpacity(0.3),
+              color: AppColors.carbon.withValues(alpha: 0.3),
               child: const Center(
                 child: CircularProgressIndicator(),
               ),

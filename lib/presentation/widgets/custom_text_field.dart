@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../core/constants/app_colors.dart';
 
+import '../../core/constants/app_colors.dart';
+import '../../core/theme/app_theme.dart';
+
+/// Campo de texto con etiqueta. Fondo suave sin borde; borde fino al enfocar.
 class CustomTextField extends StatelessWidget {
   final String label;
   final String hint;
@@ -28,6 +31,11 @@ class CustomTextField extends StatelessWidget {
     this.inputFormatters,
   });
 
+  OutlineInputBorder _border(Color? color) => OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+        borderSide: color == null ? BorderSide.none : BorderSide(color: color, width: 1.5),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -36,7 +44,7 @@ class CustomTextField extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            color: AppColors.textPrimary(context),
+            color: AppColors.textSecondary(context),
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -49,7 +57,7 @@ class CustomTextField extends StatelessWidget {
           keyboardType: keyboardType,
           maxLines: obscureText ? 1 : maxLines,
           inputFormatters: inputFormatters,
-          style: TextStyle(color: AppColors.textPrimary(context)),
+          style: TextStyle(color: AppColors.textPrimary(context), fontSize: 16),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: TextStyle(color: AppColors.textSecondary(context)),
@@ -58,27 +66,15 @@ class CustomTextField extends StatelessWidget {
                 : null,
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: AppColors.surface(context),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error, width: 2),
-            ),
+            fillColor: AppColors.surfaceLight(context),
+            border: _border(null),
+            enabledBorder: _border(null),
+            focusedBorder: _border(AppColors.textPrimary(context)),
+            errorBorder: _border(AppColors.error),
+            focusedErrorBorder: _border(AppColors.error),
           ),
         ),
       ],
     );
   }
 }
-

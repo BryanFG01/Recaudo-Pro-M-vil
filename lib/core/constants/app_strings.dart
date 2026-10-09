@@ -3,14 +3,14 @@ class AppStrings {
   static const String welcomeBack = 'Bienvenido de nuevo';
   static const String loginSubtitle =
       'Inicia sesión para continuar con tu cuenta.';
-  static const String email = 'Correo Electrónico';
+  static const String email = 'Correo electrónico';
   static const String userNumber = 'Número de usuario';
   static const String enterUserNumber = 'Ingresa tu número de usuario';
   static const String password = 'Contraseña';
   static const String enterEmail = 'Ingresa tu correo electrónico';
   static const String enterPassword = 'Ingresa tu contraseña';
   static const String forgotPassword = '¿Olvidaste tu contraseña ?';
-  static const String login = 'Iniciar Sesión';
+  static const String login = 'Iniciar sesión';
   static const String orLoginWith = 'O inicia sesión con';
   static const String noAccount =
       '¿No tienes una cuenta? Comunícate con el administrador';
@@ -33,53 +33,53 @@ class AppStrings {
   static const String home = 'Inicio';
   static const String reports = 'Reportes';
   static const String help = 'Ayuda';
-  static const String newClient = 'Crear Nuevo Cliente';
+  static const String newClient = 'Crear nuevo cliente';
 
   // Statistics Dashboard
-  static const String collectionSummary = 'Resumen de Recaudo';
+  static const String collectionSummary = 'Resumen de recaudo';
   static const String today = 'Hoy';
   static const String week = 'Semana';
   static const String month = 'Mes';
-  static const String totalCollected = 'Total Recaudado';
+  static const String totalCollected = 'Total recaudado';
   static const String totalAcumulado = 'Total acumulado';
-  static const String activeCredits = 'Créditos Activos';
-  static const String clientsInArrears = 'Clientes en Mora';
-  static const String weeklyCollection = 'Recaudo Semanal';
-  static const String creditStatus = 'Estado de Créditos';
+  static const String activeCredits = 'Créditos activos';
+  static const String clientsInArrears = 'Clientes en mora';
+  static const String weeklyCollection = 'Recaudo semanal';
+  static const String creditStatus = 'Estado de créditos';
   static const String upToDate = 'Al día';
   static const String overdue = 'Vencido';
-  static const String lastPaymentsReceived = 'Últimos Abonos Recibidos';
+  static const String lastPaymentsReceived = 'Últimos abonos recibidos';
   static const String minutesAgo = 'Hace %d minutos';
   static const String hoursAgo = 'Hace %d hora(s)';
 
   // Credit List
-  static const String myWallet = 'Mi Cartera';
+  static const String myWallet = 'Mi cartera';
   static const String searchByNameOrId = 'Buscar por nombre o cédula...';
-  static const String lastPayment = 'Último Abono';
-  static const String installmentValue = 'Valor Cuota';
-  static const String overdueInstallments = 'Cuotas Atrasadas';
-  static const String totalBalance = 'Saldo Total';
-  static const String totalLoanAmount = 'Saldo Total del Préstamo';
-  static const String remainingBalance = 'Saldo Restante';
-  static const String lastPayments = 'Últimos Abonos';
+  static const String lastPayment = 'Último abono';
+  static const String installmentValue = 'Valor cuota';
+  static const String overdueInstallments = 'Cuotas atrasadas';
+  static const String totalBalance = 'Saldo total';
+  static const String totalLoanAmount = 'Saldo total del préstamo';
+  static const String remainingBalance = 'Saldo restante';
+  static const String lastPayments = 'Últimos abonos';
 
   // Client Visit
   static const String visitClient = 'Visita: Cliente';
-  static const String collectionManagement = 'Gestión de Recaudo';
-  static const String clientInformation = 'Información del Cliente';
+  static const String collectionManagement = 'Gestión de recaudo';
+  static const String clientInformation = 'Información del cliente';
   static const String locate = 'Ubicar';
   static const String name = 'Nombre';
   static const String clientId = 'ID de Cliente';
   static const String address = 'Dirección';
-  static const String amountToCollectToday = 'Monto a Recaudar Hoy';
-  static const String dueDate = 'Fecha de Vencimiento';
-  static const String paymentAmount = 'Monto del Abono';
+  static const String amountToCollectToday = 'Monto a recaudar hoy';
+  static const String dueDate = 'Fecha de vencimiento';
+  static const String paymentAmount = 'Monto del abono';
   static const String enterSpecificAmount = 'Ingrese un monto específico';
   static const String makePayment = 'Realizar un Abono';
-  static const String payFullInstallment = 'Pagar Cuota Completa';
+  static const String payFullInstallment = 'Pagar cuota completa';
 
   // New Client Screen
-  static const String createNewClient = 'Crear Nuevo Cliente';
+  static const String createNewClient = 'Crear nuevo cliente';
   static const String firstName = 'Nombre';
   static const String lastName = 'Apellido';
   static const String enterFirstName = 'Ingrese el nombre';
@@ -100,48 +100,48 @@ class AppStrings {
       'La cámara no está disponible en la versión web. Usa la app en un dispositivo móvil (Android o iOS).';
   static const String cameraPluginNotLinked =
       'La cámara no está disponible. Cierra la app por completo, ábrela de nuevo e intenta otra vez. Si usas emulador, prueba en un dispositivo físico.';
-  static const String saveClient = 'Guardar Cliente';
+  static const String saveClient = 'Guardar cliente';
   static const String clientCreatedSuccessfully = 'Cliente creado exitosamente';
 
   // Credit Details in New Client
-  static const String creditDetails = 'Detalles del Crédito';
-  static const String creditAmount = 'Monto del Crédito';
+  static const String creditDetails = 'Detalles del crédito';
+  static const String creditAmount = 'Monto del crédito';
   static const String enterCreditAmount = '\$ 0.00';
-  static const String startDate = 'Fecha de Inicio';
-  static const String endDate = 'Fecha Final';
+  static const String startDate = 'Fecha de inicio';
+  static const String endDate = 'Fecha final';
   static const String interest = 'Intereses';
   static const String interestRate = '%';
-  static const String dailyInstallment = 'Cuota Diaria';
-  static const String calculatedDailyInstallment = 'Cuota Diaria Calculada';
-  static const String totalDays = 'Días Totales';
-  static const String saveClientAndCredit = 'Guardar Cliente y Crédito';
+  static const String dailyInstallment = 'Cuota diaria';
+  static const String calculatedDailyInstallment = 'Cuota diaria calculada';
+  static const String totalDays = 'Días totales';
+  static const String saveClientAndCredit = 'Guardar cliente y crédito';
   static const String clientAndCreditCreated =
       'Cliente y crédito creados exitosamente';
 
   // My Wallet Screen
-  static const String lastPaymentLabel = 'Último Abono';
-  static const String installmentValueLabel = 'Valor Cuota';
-  static const String overdueInstallmentsLabel = 'Cuotas Atrasadas';
-  static const String totalBalanceLabel = 'Saldo Total';
+  static const String lastPaymentLabel = 'Último abono';
+  static const String installmentValueLabel = 'Valor cuota';
+  static const String overdueInstallmentsLabel = 'Cuotas atrasadas';
+  static const String totalBalanceLabel = 'Saldo total';
 
   // New Collection Screen
-  static const String newCollectionTitle = 'Nuevo Recaudo';
+  static const String newCollectionTitle = 'Nuevo recaudo';
   static const String client = 'Cliente';
   static const String selectClient = 'Seleccionar un cliente';
-  static const String amountToCollect = 'Monto a Recaudar';
-  static const String collectionType = 'Tipo de Abono';
-  static const String regularPayment = 'Abono a Cuota';
-  static const String extraPayment = 'Abono Extra';
+  static const String amountToCollect = 'Monto a recaudar';
+  static const String collectionType = 'Tipo de abono';
+  static const String regularPayment = 'Abono a cuota';
+  static const String extraPayment = 'Abono extra';
   static const String notes = 'Notas (Opcional)';
   static const String addNote = 'Agrega una nota sobre el recaudo...';
-  static const String saveCollection = 'Guardar Recaudo';
+  static const String saveCollection = 'Guardar recaudo';
   static const String collectionSavedSuccessfully =
       'Recaudo guardado exitosamente';
   static const String pleaseSelectClient = 'Por favor selecciona un cliente';
   static const String pleaseEnterAmount = 'Por favor ingresa un monto válido';
 
   // Business Selection Screen
-  static const String selectBusiness = 'Seleccionar Negocio';
+  static const String selectBusiness = 'Seleccionar negocio';
   static const String searchBusinessByNameOrNumber =
       'Buscar negocio por nombre o número';
   static const String searchBusiness = 'Buscar negocio';
@@ -150,17 +150,17 @@ class AppStrings {
   static const String pleaseSelectBusiness = 'Por favor selecciona un negocio';
 
   // Collection History
-  static const String collectionHistory = 'Historial de Recaudos';
-  static const String remainingLoanAmount = 'Monto Préstamo Restante';
+  static const String collectionHistory = 'Historial de recaudos';
+  static const String remainingLoanAmount = 'Monto préstamo restante';
   static const String total = 'Total';
   static const String installmentAmount = 'Monto de la Cuota';
-  static const String fullNameOfClient = 'Nombre Completo del Cliente';
-  static const String registerPayment = 'Registrar Abono';
+  static const String fullNameOfClient = 'Nombre completo del cliente';
+  static const String registerPayment = 'Registrar abono';
 
   // Credit Renewal
-  static const String noOutstandingBalance = 'Sin Saldo Pendiente';
+  static const String noOutstandingBalance = 'Sin saldo pendiente';
   static const String clientPaidOff = 'El cliente ya está sin saldo pendiente';
-  static const String renewCredit = 'Renovar Crédito';
+  static const String renewCredit = 'Renovar crédito';
   static const String renewCreditConfirmation = '¿Deseas renovar el crédito?';
   static const String renewCreditMessage =
       'Se renovará el crédito por el mismo monto original. Si hay deuda pendiente, se descontará del nuevo crédito.';
@@ -175,21 +175,21 @@ class AppStrings {
   static const String cashSessionSubtitle = 'Retiros y saldo';
   static const String noActiveCashSession =
       'No hay sesión de caja activa. Contacta al administrador.';
-  static const String initialBalance = 'Saldo Inicial';
+  static const String initialBalance = 'Saldo inicial';
   static const String saldoDisponible = 'Saldo disponible';
   static const String cajaInicialRestante = 'Saldo inicial restante';
   static const String withdrawal = 'Retiro';
-  static const String newWithdrawal = 'Nuevo Retiro';
+  static const String newWithdrawal = 'Nuevo retiro';
   static const String amount = 'Monto';
   static const String reason = 'Motivo';
   static const String enterAmount = 'Ingrese el monto';
   static const String enterReason = 'Ej: Pago a proveedor';
-  static const String requestWithdrawal = 'Solicitar Retiro';
+  static const String requestWithdrawal = 'Solicitar retiro';
   static const String withdrawalRequested =
       'Retiro solicitado. Pendiente de aprobación del administrador.';
   static const String withdrawalApproved =
       'Tu retiro fue aprobado por el administrador.';
-  static const String myWithdrawals = 'Mis Retiros';
+  static const String myWithdrawals = 'Mis retiros';
   static const String noWithdrawals = 'No hay retiros';
   static const String pendingApproval = 'Pendiente de aprobación';
   static const String approved = 'Aprobado';
@@ -202,12 +202,12 @@ class AppStrings {
       : 'Tienes $n retiros aprobados por el administrador.';
 
   // Reportes - Caja inicial, Retiros, Gastos
-  static const String initialCash = 'Caja Inicial';
+  static const String initialCash = 'Caja inicial';
   static const String withdrawalsReport = 'Retiros';
   static const String withdrawalsReportSubtitle = 'Reporte de retiros y saldo';
   static const String expenses = 'Gastos';
   static const String expensesSubtitle = 'Registrar gastos administrativos';
-  static const String registerExpense = 'Registrar Gasto';
+  static const String registerExpense = 'Registrar gasto';
   static const String expenseAmount = 'Monto del gasto';
   static const String expenseReason = 'Motivo del gasto';
   static const String expenseReasonHint =

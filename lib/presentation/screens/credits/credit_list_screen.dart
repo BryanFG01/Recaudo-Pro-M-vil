@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../providers/credit_provider.dart';
 import '../../providers/client_provider.dart';
+import '../../../core/utils/currency_format.dart';
 
 class CreditListScreen extends ConsumerStatefulWidget {
   const CreditListScreen({super.key});
@@ -42,7 +43,7 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -61,7 +62,7 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
                 filled: true,
                 fillColor: AppColors.surface(context),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -106,7 +107,7 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
   }
 
   Widget _buildCreditCard(credit) {
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final formatter = AppCurrency.formatter;
 
     return FutureBuilder<ClientEntity?>(
       future: ref.read(clientRepositoryProvider).getClientById(credit.clientId),
@@ -121,12 +122,13 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
               context.push('/client-visit/${client.id}');
             }
           },
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           child: Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppColors.surface(context),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppTheme.radiusCard),
             ),
             child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -139,7 +141,7 @@ class _CreditListScreenState extends ConsumerState<CreditListScreen> {
                     style: TextStyle(
                       color: AppColors.textPrimary(context),
                       fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   Row(

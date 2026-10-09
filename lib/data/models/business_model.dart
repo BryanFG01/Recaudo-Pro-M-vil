@@ -16,20 +16,25 @@ class BusinessModel extends BusinessEntity {
   });
 
   factory BusinessModel.fromJson(Map<String, dynamic> json) {
+    final createdAt = _parseDate(json['created_at']) ?? DateTime.now();
     return BusinessModel(
       id: (json['id'] ?? json['_id'] ?? '').toString(),
-      name: json['name'] as String,
-      code: json['code'] as String,
+      name: (json['name'] ?? '').toString(),
+      code: (json['code'] ?? '').toString(),
       description: json['description'] as String?,
       logoUrl: json['logo_url'] as String?,
       address: json['address'] as String?,
       phone: json['phone'] as String?,
       email: json['email'] as String?,
       isActive: json['is_active'] as bool? ?? true,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      createdAt: createdAt,
+      // Un negocio que nunca se editó llega con updated_at = null
+      updatedAt: _parseDate(json['updated_at']) ?? createdAt,
     );
   }
+
+  static DateTime? _parseDate(Object? value) =>
+      value is String ? DateTime.tryParse(value) : null;
 
   Map<String, dynamic> toJson() {
     return {

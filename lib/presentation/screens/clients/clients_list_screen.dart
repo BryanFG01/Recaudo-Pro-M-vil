@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
 import '../../providers/client_provider.dart';
@@ -203,7 +204,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                 color: AppColors.surface(context),
                 border: Border(
                   bottom: BorderSide(
-                    color: AppColors.textSecondary(context),
+                    color: AppColors.divider(context),
                     width: 0.5,
                   ),
                 ),
@@ -223,7 +224,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                     style: TextStyle(
                       color: AppColors.textPrimary(context),
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const Spacer(),
@@ -236,9 +237,12 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                     onPressed: () {
                       ref.invalidate(clientsProvider);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Actualizando datos...'),
-                          duration: Duration(seconds: 2),
+                        SnackBar(
+                          content: Text(
+                            'Actualizando datos...',
+                            style: TextStyle(color: AppColors.onPrimary),
+                          ),
+                          duration: const Duration(seconds: 2),
                           backgroundColor: AppColors.primary,
                         ),
                       );
@@ -262,9 +266,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                     color: AppColors.textSecondary(context),
                   ),
                   filled: true,
-                  fillColor: AppColors.background(context),
+                  fillColor: AppColors.surfaceLight(context),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                     borderSide: BorderSide.none,
                   ),
                   contentPadding: const EdgeInsets.symmetric(
@@ -300,12 +304,20 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 64,
-                            color: AppColors.textSecondary(
-                              context,
-                            ).withOpacity(0.5),
+                          Container(
+                            width: 72,
+                            height: 72,
+                            decoration: BoxDecoration(
+                              color: AppColors.mint,
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusCard,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.people_outline,
+                              size: 36,
+                              color: AppColors.carbon,
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -389,11 +401,7 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.textSecondary(context).withOpacity(0.2),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           ),
           child: Row(
             children: [
@@ -420,13 +428,15 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                           ),
                           decoration: BoxDecoration(
                             color:
-                                hasDebt
-                                    ? AppColors.error.withOpacity(0.2)
-                                    : AppColors.success.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(8),
+                hasDebt
+                                    ? AppColors.error.withValues(alpha: 0.12)
+                                    : AppColors.success.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.radiusControl,
+                            ),
                           ),
                           child: Text(
-                            hasDebt ? 'Debe' : 'No Debe',
+                            hasDebt ? 'Debe' : 'No debe',
                             style: TextStyle(
                               color:
                                   hasDebt ? AppColors.error : AppColors.success,
@@ -456,9 +466,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                 children: [
                   // Renovar Button
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.autorenew_rounded,
-                      color: AppColors.primary,
+                      color: AppColors.textPrimary(context),
                       size: 24,
                     ),
                     onPressed:
@@ -469,9 +479,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                   ),
                   // Locate Button
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.location_on_outlined,
-                      color: AppColors.primary,
+                      color: AppColors.textPrimary(context),
                       size: 24,
                     ),
                     onPressed: () => _locateClient(client),
@@ -480,9 +490,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                   // Call Button
                   if (client.phone.isNotEmpty)
                     IconButton(
-                      icon: const Icon(
+                      icon: Icon(
                         Icons.phone_outlined,
-                        color: AppColors.primary,
+                        color: AppColors.textPrimary(context),
                         size: 24,
                       ),
                       onPressed: () => _callClient(client.phone),

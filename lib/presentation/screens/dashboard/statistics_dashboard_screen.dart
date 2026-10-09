@@ -5,13 +5,15 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/closing_balance_storage.dart';
 import '../../../domain/entities/daily_summary_by_user_entity.dart';
 import '../../../domain/entities/daily_summary_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
 import '../../providers/closing_balance_provider.dart';
-import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../../core/utils/currency_format.dart';
 
 class StatisticsDashboardScreen extends ConsumerWidget {
   const StatisticsDashboardScreen({super.key});
@@ -34,7 +36,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
@@ -92,7 +94,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
   Widget _buildContent(BuildContext context, WidgetRef ref,
       DailySummaryByUserEntity summary, String userId) {
     final formatter =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 2, locale: 'es');
+        AppCurrency.formatter;
     final dateFormatter = DateFormat("EEE d 'de' MMMM yyyy", 'es');
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -161,7 +163,6 @@ class StatisticsDashboardScreen extends ConsumerWidget {
                         'Caja inicial + Recaudo - Retiros - Gastos\n- Ventas',
                     valueColor:
                         cajaActual >= 0 ? AppColors.textPrimary(context) : AppColors.error,
-                    borderColor: AppColors.primary,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -201,7 +202,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
               style: TextStyle(
                 color: AppColors.textPrimary(context),
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 16),
@@ -222,7 +223,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
                     context,
                     icon: Icons.receipt_long_outlined,
                     title: 'Gastos',
-                    subtitle: 'ver gastos',
+                    subtitle: 'Ver gastos',
                     onTap: () => context.push('/report-expenses'),
                   ),
                 ),
@@ -241,16 +242,12 @@ class StatisticsDashboardScreen extends ConsumerWidget {
     required String value,
     String? subtitle,
     Color? valueColor,
-    Color? borderColor,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface(context),
-        borderRadius: BorderRadius.circular(16),
-        border: borderColor != null
-            ? Border.all(color: borderColor, width: 1.5)
-            : null,
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,15 +255,17 @@ class StatisticsDashboardScreen extends ConsumerWidget {
           Row(
             children: [
               if (icon != null) ...[
-                Icon(icon, color: AppColors.primary, size: 18),
-                const SizedBox(width: 6),
+                _buildIconChip(icon, size: 28, iconSize: 16),
+                const SizedBox(width: 8),
               ],
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.textSecondary(context),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: AppColors.textSecondary(context),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ],
@@ -277,7 +276,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
             style: TextStyle(
               color: valueColor ?? AppColors.textPrimary(context),
               fontSize: 22,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w700,
             ),
           ),
           if (subtitle != null) ...[
@@ -286,7 +285,7 @@ class StatisticsDashboardScreen extends ConsumerWidget {
               subtitle,
               style: TextStyle(
                 color: AppColors.textSecondary(context),
-                fontSize: 10,
+                fontSize: 12,
               ),
             ),
           ],
@@ -299,25 +298,28 @@ class StatisticsDashboardScreen extends ConsumerWidget {
       String userId, DailySummaryEntity? todayItem, double cajaActualToUse) {
     return InkWell(
       onTap: () => _showCloseDayDialog(context, ref, userId, todayItem, cajaActualToUse),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppTheme.radiusControl),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.primary.withOpacity(0.5)),
+          borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+          border: Border.all(color: AppColors.textSecondary(context), width: 1.5),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.lock_clock, color: AppColors.primary, size: 20),
+            Icon(Icons.lock_clock,
+                color: AppColors.textPrimary(context), size: 20),
             const SizedBox(width: 8),
-            Text(
-              'Cerrar día (caja actual \u2192 caja inicial mañana)',
-              style: TextStyle(
-                color: AppColors.primary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+            Flexible(
+              child: Text(
+                'Cerrar día (caja actual \u2192 caja inicial mañana)',
+                style: TextStyle(
+                  color: AppColors.textPrimary(context),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ],
@@ -329,19 +331,20 @@ class StatisticsDashboardScreen extends ConsumerWidget {
   Future<void> _showCloseDayDialog(BuildContext context, WidgetRef ref,
       String userId, DailySummaryEntity? todayItem, double cajaActualToUse) async {
     final formatter =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 2, locale: 'es');
+        AppCurrency.formatter;
     final cajaActual = cajaActualToUse;
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface(ctx),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard)),
         title: Text(
           'Cerrar día',
           style: TextStyle(
             color: AppColors.textPrimary(ctx),
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
@@ -358,7 +361,8 @@ class StatisticsDashboardScreen extends ConsumerWidget {
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(AppStrings.confirm,
                 style: TextStyle(
-                    color: AppColors.primary, fontWeight: FontWeight.bold)),
+                    color: AppColors.textPrimary(ctx),
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -424,23 +428,23 @@ class StatisticsDashboardScreen extends ConsumerWidget {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primary, size: 32),
+            _buildIconChip(icon, size: 48, iconSize: 26),
             const SizedBox(height: 12),
             Text(
               title,
               style: TextStyle(
                 color: AppColors.textPrimary(context),
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 4),
@@ -448,13 +452,27 @@ class StatisticsDashboardScreen extends ConsumerWidget {
               subtitle,
               style: TextStyle(
                 color: AppColors.textSecondary(context),
-                fontSize: 11,
+                fontSize: 12,
               ),
               textAlign: TextAlign.center,
             ),
           ],
         ),
       ),
+    );
+  }
+
+  /// Chip mint con icono (acento de DESIGN.MD).
+  Widget _buildIconChip(IconData icon,
+      {required double size, required double iconSize}) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppColors.mint,
+        borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+      ),
+      child: Icon(icon, color: AppColors.carbon, size: iconSize),
     );
   }
 }

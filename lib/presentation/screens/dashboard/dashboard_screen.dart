@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/business_provider.dart';
 import '../../providers/cash_session_provider.dart';
@@ -25,14 +26,14 @@ class DashboardScreen extends ConsumerWidget {
         return AlertDialog(
           backgroundColor: AppColors.surface(dialogContext),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           ),
           title: Text(
-            'Cerrar Sesión',
+            'Cerrar sesión',
             style: TextStyle(
               color: AppColors.textPrimary(dialogContext),
               fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           content: Text(
@@ -58,18 +59,17 @@ class DashboardScreen extends ConsumerWidget {
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
-                ref.read(authRepositoryProvider).signOut().then((_) {
-                  ref.read(currentUserProvider.notifier).setUser(null);
+                ref.read(currentUserProvider.notifier).signOut().then((_) {
                   ref.read(selectedBusinessProvider.notifier).clearBusiness();
-                  context.go('/login');
+                  if (context.mounted) context.go('/login');
                 });
               },
               child: Text(
                 'Aceptar',
                 style: TextStyle(
-                  color: AppColors.primary,
+                  color: AppColors.textPrimary(dialogContext),
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -92,8 +92,8 @@ class DashboardScreen extends ConsumerWidget {
         elevation: 0,
         leading: Container(
           margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.pink,
+          decoration: const BoxDecoration(
+            color: AppColors.mint,
             shape: BoxShape.circle,
           ),
           child: user?.avatarUrl != null
@@ -103,7 +103,7 @@ class DashboardScreen extends ConsumerWidget {
                     fit: BoxFit.cover,
                   ),
                 )
-              : const Icon(Icons.person, color: Colors.white),
+              : const Icon(Icons.person, color: AppColors.carbon),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -113,7 +113,7 @@ class DashboardScreen extends ConsumerWidget {
               style: TextStyle(
                 color: AppColors.textPrimary(context),
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -153,7 +153,6 @@ class DashboardScreen extends ConsumerWidget {
                 const SnackBar(
                   content: Text('Actualizando datos...'),
                   duration: Duration(seconds: 2),
-                  backgroundColor: AppColors.primary,
                 ),
               );
             },
@@ -198,25 +197,25 @@ class DashboardScreen extends ConsumerWidget {
               onTap: () {
                 context.push('/new-client');
               },
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppTheme.radiusControl),
               child: Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.person_add_outlined,
-                        color: Colors.white, size: 24),
+                    Icon(Icons.person_add_outlined,
+                        color: AppColors.onPrimary, size: 24),
                     const SizedBox(width: 12),
                     Text(AppStrings.newClient,
-                        style: const TextStyle(
-                            color: Colors.white,
+                        style: TextStyle(
+                            color: AppColors.onPrimary,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold)),
+                            fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),

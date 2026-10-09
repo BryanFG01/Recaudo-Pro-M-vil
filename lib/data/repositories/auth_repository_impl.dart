@@ -10,42 +10,28 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<UserEntity?> signInWithNumber(
       String businessId, String number, String password) async {
-    final user = await remoteDataSource.signInWithNumber(
-        number.trim(), password);
+    final user = await remoteDataSource.signInWithNumber(number.trim(), password);
     if (user == null) return null;
-    if (user.businessId != businessId) return null;
+    // El número existe pero en otro negocio: no se deja la sesión abierta
+    if (user.businessId != businessId) {
+      await remoteDataSource.signOut();
+      return null;
+    }
     return user;
   }
 
   @override
-  Future<UserEntity?> signInWithEmail(
-      String businessId, String email, String password) {
-    return remoteDataSource.signInWithEmail(businessId, email, password);
-  }
+  Future<void> signOut() => remoteDataSource.signOut();
 
   @override
-  Future<UserEntity?> signInWithGoogle() {
-    return remoteDataSource.signInWithGoogle();
-  }
+  Future<UserEntity?> getCurrentUser() => remoteDataSource.getCurrentUser();
 
   @override
-  Future<UserEntity?> signInWithApple() {
-    return remoteDataSource.signInWithApple();
-  }
+  Stream<void> get sessionEnded => remoteDataSource.sessionEnded;
 
   @override
-  Future<void> signOut() {
-    return remoteDataSource.signOut();
-  }
+  Future<String?> getRememberedNumber() => remoteDataSource.getRememberedNumber();
 
   @override
-  Future<UserEntity?> getCurrentUser() {
-    return remoteDataSource.getCurrentUser();
-  }
-
-  @override
-  Future<void> resetPassword(String email) {
-    return remoteDataSource.resetPassword(email);
-  }
+  Future<void> setRememberedNumber(String? number) => remoteDataSource.setRememberedNumber(number);
 }
-

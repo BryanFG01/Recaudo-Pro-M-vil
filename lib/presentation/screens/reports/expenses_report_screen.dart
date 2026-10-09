@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/withdrawal_entity.dart';
 import '../../../domain/entities/withdrawals_data_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
-import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../../core/utils/currency_format.dart';
 
 /// Reporte de gastos: solo la lista de gastos (como Retiros). El registro de gasto está en Gastos.
 class ExpensesReportScreen extends ConsumerWidget {
@@ -38,7 +40,7 @@ class ExpensesReportScreen extends ConsumerWidget {
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
@@ -49,9 +51,12 @@ class ExpensesReportScreen extends ConsumerWidget {
               if (user != null) {
                 ref.invalidate(withdrawalsByUserProvider(user.id));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Actualizando datos...'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(
+                      'Actualizando datos...',
+                      style: TextStyle(color: AppColors.onPrimary),
+                    ),
+                    duration: const Duration(seconds: 2),
                     backgroundColor: AppColors.primary,
                   ),
                 );
@@ -100,7 +105,7 @@ class ExpensesReportScreen extends ConsumerWidget {
         ],
       );
     }
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
+    final formatter = AppCurrency.formatter;
     return ListView.builder(
       padding: const EdgeInsets.all(20),
       physics: const AlwaysScrollableScrollPhysics(),
@@ -115,13 +120,7 @@ class ExpensesReportScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: w.isApproved
-                  ? AppColors.success.withOpacity(0.5)
-                  : AppColors.warning.withOpacity(0.5),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           ),
           child: Row(
             children: [
@@ -131,10 +130,12 @@ class ExpensesReportScreen extends ConsumerWidget {
                   children: [
                     Text(
                       formatter.format(w.amount),
-                      style: TextStyle(
-                        color: AppColors.textPrimary(context),
+                      // Egreso de caja: se muestra en rojo (significado financiero).
+                      style: const TextStyle(
+                        color: AppColors.error,
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
+                        fontFeatures: [FontFeature.tabularFigures()],
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -161,9 +162,9 @@ class ExpensesReportScreen extends ConsumerWidget {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: w.isApproved
-                      ? AppColors.success.withOpacity(0.2)
-                      : AppColors.warning.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(8),
+                      ? AppColors.success.withValues(alpha: 0.15)
+                      : AppColors.warning.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   w.isApproved

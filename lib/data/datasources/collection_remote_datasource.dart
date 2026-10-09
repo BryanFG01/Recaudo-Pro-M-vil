@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
+import 'api_client.dart';
 import '../../domain/entities/collection_entity.dart';
 import '../../domain/entities/dashboard_stats_entity.dart';
 import '../models/collection_model.dart';
@@ -38,6 +38,8 @@ abstract class CollectionRemoteDataSource {
 }
 
 class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
+  final ApiClient _api = ApiClient.instance;
+
   CollectionRemoteDataSourceImpl([CreditRemoteDataSource? creditDataSource])
       : _creditDataSource = creditDataSource;
 
@@ -46,7 +48,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
   @override
   Future<void> deleteCollection(String id) async {
     final url = ApiConfig.buildApiUrl('/api/collections/$id');
-    final response = await http.delete(Uri.parse(url));
+    final response = await _api.delete(Uri.parse(url));
     if (response.statusCode != 200 && response.statusCode != 204) {
       throw Exception('Error al eliminar recaudo: ${response.statusCode}');
     }
@@ -59,7 +61,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final url = query.isEmpty
         ? ApiConfig.buildApiUrl('/api/collections')
         : ApiConfig.buildApiUrlWithQuery('/api/collections', query);
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception('Error al obtener recaudos: ${response.statusCode}');
     }
@@ -78,7 +80,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final query = <String, String>{'limit': limit.toString()};
     if (businessId != null) query['business_id'] = businessId;
     final url = ApiConfig.buildApiUrlWithQuery('/api/collections', query);
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception(
           'Error al obtener recaudos recientes: ${response.statusCode}');
@@ -98,7 +100,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final query = <String, String>{'client_id': clientId};
     if (businessId != null) query['business_id'] = businessId;
     final url = ApiConfig.buildApiUrlWithQuery('/api/collections', query);
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception(
           'Error al obtener recaudos del cliente: ${response.statusCode}');
@@ -118,7 +120,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     final query = <String, String>{'credit_id': creditId};
     if (businessId != null) query['business_id'] = businessId;
     final url = ApiConfig.buildApiUrlWithQuery('/api/collections', query);
-    final response = await http.get(Uri.parse(url));
+    final response = await _api.get(Uri.parse(url));
     if (response.statusCode != 200) {
       throw Exception(
           'Error al obtener recaudos del crédito: ${response.statusCode}');
@@ -158,7 +160,7 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     if (businessId != null && businessId.isNotEmpty) {
       body['business_id'] = businessId;
     }
-    final response = await http.post(
+    final response = await _api.post(
       Uri.parse(url),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(body),

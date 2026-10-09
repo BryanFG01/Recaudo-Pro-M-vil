@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/collection_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
@@ -18,6 +19,7 @@ import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
 import '../../providers/payment_attempt_provider.dart';
 import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../../core/utils/currency_format.dart';
 
 class MyWalletScreen extends ConsumerStatefulWidget {
   const MyWalletScreen({super.key});
@@ -335,7 +337,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
             style: TextStyle(
               color: AppColors.textPrimary(context),
               fontSize: 20,
-              fontWeight: FontWeight.bold,
+              fontWeight: FontWeight.w600,
             ),
           ),
           bottom: TabBar(
@@ -358,9 +360,12 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                   _dataCache.clear();
                 });
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Actualizando datos...'),
-                    duration: Duration(seconds: 2),
+                  SnackBar(
+                    content: Text(
+                      'Actualizando datos...',
+                      style: TextStyle(color: AppColors.onPrimary),
+                    ),
+                    duration: const Duration(seconds: 2),
                     backgroundColor: AppColors.primary,
                   ),
                 );
@@ -412,7 +417,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               filled: true,
               fillColor: AppColors.surface(context),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                 borderSide: BorderSide.none,
               ),
             ),
@@ -434,7 +439,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               labelText: 'Estado de recaudo',
               labelStyle: TextStyle(color: AppColors.textSecondary(context)),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusControl),
                 borderSide: BorderSide.none,
               ),
               filled: true,
@@ -644,23 +649,24 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
       BuildContext context, ClientEntity client, CreditEntity? credit) {
     return InkWell(
       onTap: () => context.push('/client-visit/${client.id}'),
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(AppTheme.radiusCard),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.surface(context),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.primary.withOpacity(0.3),
-            width: 1,
-          ),
+          borderRadius: BorderRadius.circular(AppTheme.radiusCard),
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: AppColors.primary.withOpacity(0.2),
-              child: Icon(Icons.person, color: AppColors.primary),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.mint,
+                borderRadius: BorderRadius.circular(AppTheme.radiusControl),
+              ),
+              child: const Icon(Icons.person_outline, color: AppColors.carbon),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -695,12 +701,12 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
             ),
             if (credit != null)
               Text(
-                NumberFormat.currency(symbol: '\$', decimalDigits: 0)
+                AppCurrency.formatter
                     .format(credit.totalAmount),
                 style: TextStyle(
-                  color: AppColors.primary,
+                  color: AppColors.textPrimary(context),
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             const SizedBox(width: 8),
@@ -790,11 +796,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: AppColors.surface(context),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.textSecondary(context).withOpacity(0.1),
-                width: 1,
-              ),
+              borderRadius: BorderRadius.circular(AppTheme.radiusCard),
             ),
             child: const Center(
               child: CircularProgressIndicator(),
@@ -847,7 +849,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
     int noPaymentDays = 0,
     void Function()? onVisitTap,
   ]) {
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
+    final formatter = AppCurrency.formatter;
     final dateFormatter = DateFormat('dd/MM/yyyy');
     // Saldo restante desde API summary (como en la web), no del listado de créditos
     final effectiveBalance = summary?.totalBalance ?? credit.totalBalance;
@@ -892,17 +894,14 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
             context.push('/client-visit/${client.id}');
           }
         },
+        borderRadius: BorderRadius.circular(AppTheme.radiusCard),
         child: Container(
           key: ValueKey('credit_${credit.id}'), // Key única para cada tarjeta
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: AppColors.surface(context),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.textSecondary(context).withOpacity(0.1),
-              width: 1,
-            ),
+            borderRadius: BorderRadius.circular(AppTheme.radiusCard),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -917,16 +916,24 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                       style: TextStyle(
                         color: AppColors.textPrimary(context),
                         fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   if (clientPhone.isNotEmpty)
                     IconButton(
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.mint,
+                        foregroundColor: AppColors.carbon,
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppTheme.radiusControl),
+                        ),
+                      ),
                       icon: const Icon(
-                        Icons.phone,
-                        color: AppColors.primary,
-                        size: 24,
+                        Icons.phone_outlined,
+                        color: AppColors.carbon,
+                        size: 22,
                       ),
                       onPressed: () async {
                         // Limpiar el número de teléfono (eliminar espacios, guiones, etc.)
@@ -972,8 +979,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                 const SizedBox(height: 4),
                 Text(
                   clientPhone,
-                  style: const TextStyle(
-                    color: AppColors.primary,
+                  style: TextStyle(
+                    color: AppColors.textSecondary(context),
                     fontSize: 14,
                   ),
                 ),
@@ -982,26 +989,26 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                 const SizedBox(height: 8),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppColors.mint,
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
-                        Icons.directions_car,
+                        Icons.directions_car_outlined,
                         size: 16,
-                        color: AppColors.primary,
+                        color: AppColors.carbon,
                       ),
                       const SizedBox(width: 4),
                       Text(
                         'A ${_distances[credit.id]!.toStringAsFixed(2)} km',
                         style: const TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
+                          color: AppColors.carbon,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
@@ -1012,7 +1019,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               // Divider
               Container(
                 height: 1,
-                color: AppColors.textSecondary(context).withOpacity(0.2),
+                color: AppColors.divider(context),
               ),
               const SizedBox(height: 20),
               // Fechas del préstamo
@@ -1074,7 +1081,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
               // Divider
               Container(
                 height: 1,
-                color: AppColors.textSecondary(context).withOpacity(0.2),
+                color: AppColors.divider(context),
               ),
               const SizedBox(height: 20),
               // Saldo Total del Préstamo y Saldo Restante
@@ -1161,7 +1168,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                           Text(
                             formatter.format(collection.amount),
                             style: const TextStyle(
-                              color: AppColors.primary,
+                              color: AppColors.success,
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),

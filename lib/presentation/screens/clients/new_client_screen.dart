@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/business_helper.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/entities/client_entity.dart';
@@ -318,15 +319,15 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             colorScheme: isDark
                 ? ColorScheme.dark(
                     primary: AppColors.primary,
-                    onPrimary: Colors.white,
+                    onPrimary: AppColors.onPrimary,
                     surface: AppColors.surface(context),
-                    onSurface: Colors.white,
+                    onSurface: AppColors.textPrimary(context),
                   )
                 : ColorScheme.light(
                     primary: AppColors.primary,
-                    onPrimary: Colors.white,
-                    surface: Colors.white,
-                    onSurface: Colors.black,
+                    onPrimary: AppColors.onPrimary,
+                    surface: AppColors.surface(context),
+                    onSurface: AppColors.textPrimary(context),
                   ),
           ),
           child: child!,
@@ -812,12 +813,12 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
         ),
         title: Text(
           widget.clientId != null
-              ? (widget.isRenovation ? 'Renovar Cliente' : 'Editar Cliente')
+              ? (widget.isRenovation ? 'Renovar cliente' : 'Editar cliente')
               : AppStrings.createNewClient,
           style: TextStyle(
             color: AppColors.textPrimary(context),
             fontSize: 20,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),
@@ -900,18 +901,26 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         _latitude != null && _longitude != null
                             ? 'Ubicación capturada'
                             : 'Capturar ubicación actual',
-                        style: const TextStyle(fontSize: 12),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: _latitude != null && _longitude != null
                             ? AppColors.success
-                            : AppColors.primary,
+                            : AppColors.textPrimary(context),
                         side: BorderSide(
                           color: _latitude != null && _longitude != null
                               ? AppColors.success
-                              : AppColors.primary,
+                              : AppColors.textPrimary(context),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusControl,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -923,7 +932,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                   'Lat: ${_latitude!.toStringAsFixed(6)}, Lng: ${_longitude!.toStringAsFixed(6)}',
                   style: const TextStyle(
                     color: AppColors.success,
-                    fontSize: 11,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -958,45 +967,40 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               const SizedBox(height: 10),
               Material(
                 color: AppColors.surface(context),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                 child: InkWell(
                   onTap: _isCapturingDocument ? null : _takeDocumentPhoto,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       vertical: 20,
                       horizontal: 20,
                     ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: AppColors.primary.withOpacity(0.5),
-                        width: 1.5,
-                      ),
-                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         if (_isCapturingDocument)
-                          const SizedBox(
+                          SizedBox(
                             width: 24,
                             height: 24,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: AppColors.primary,
+                              color: AppColors.textPrimary(context),
                             ),
                           )
                         else
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(10),
+                              color: AppColors.mint,
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
                             ),
                             child: const Icon(
                               Icons.camera_alt_rounded,
                               size: 28,
-                              color: AppColors.primary,
+                              color: AppColors.carbon,
                             ),
                           ),
                         const SizedBox(width: 14),
@@ -1004,10 +1008,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                           _isCapturingDocument
                               ? 'Capturando...'
                               : AppStrings.takeDocumentPhoto,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
+                            color: AppColors.textPrimary(context),
                           ),
                         ),
                       ],
@@ -1018,7 +1022,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               if (_capturedDocumentFile != null) ...[
                 const SizedBox(height: 14),
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   child: Stack(
                     alignment: Alignment.topRight,
                     children: [
@@ -1028,8 +1032,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         width: double.infinity,
                         fit: BoxFit.cover,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.all(8.0),
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
                         child: Icon(
                           Icons.check_circle,
                           color: AppColors.success,
@@ -1048,7 +1052,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                 style: TextStyle(
                   color: AppColors.textPrimary(context),
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 16),
@@ -1070,7 +1074,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                     controller: _creditAmountController,
                     keyboardType: TextInputType.number,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: TextStyle(color: AppColors.textPrimary(context)),
+                    style: TextStyle(
+                      color: AppColors.textPrimary(context),
+                      fontSize: 16,
+                    ),
                     decoration: InputDecoration(
                       hintText: AppStrings.enterCreditAmount,
                       hintStyle: TextStyle(
@@ -1081,24 +1088,26 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         color: AppColors.textSecondary(context),
                       ),
                       filled: true,
-                      fillColor: AppColors.surface(context),
+                      fillColor: AppColors.surfaceLight(context),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusControl,
+                        ),
                         borderSide: BorderSide.none,
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: AppColors.textSecondary(
-                            context,
-                          ).withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusControl,
                         ),
+                        borderSide: BorderSide.none,
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: AppColors.primary,
-                          width: 2,
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.radiusControl,
+                        ),
+                        borderSide: BorderSide(
+                          color: AppColors.textPrimary(context),
+                          width: 1.5,
                         ),
                       ),
                       contentPadding: const EdgeInsets.symmetric(
@@ -1121,7 +1130,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         Text(
                           AppStrings.startDate,
                           style: TextStyle(
-                            color: AppColors.textPrimary(context),
+                            color: AppColors.textSecondary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1129,11 +1138,16 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         const SizedBox(height: 8),
                         InkWell(
                           onTap: () => _selectDate(context, true),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusControl,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.surface(context),
-                              borderRadius: BorderRadius.circular(12),
+                              color: AppColors.surfaceLight(context),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
                             ),
                             child: Row(
                               children: [
@@ -1165,7 +1179,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         Text(
                           AppStrings.endDate,
                           style: TextStyle(
-                            color: AppColors.textPrimary(context),
+                            color: AppColors.textSecondary(context),
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -1173,11 +1187,16 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                         const SizedBox(height: 8),
                         InkWell(
                           onTap: () => _selectDate(context, false),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.radiusControl,
+                          ),
                           child: Container(
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
-                              color: AppColors.surface(context),
-                              borderRadius: BorderRadius.circular(12),
+                              color: AppColors.surfaceLight(context),
+                              borderRadius: BorderRadius.circular(
+                                AppTheme.radiusControl,
+                              ),
                             ),
                             child: Row(
                               children: [
@@ -1219,11 +1238,10 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
               if (_creditAmountController.text.trim().isNotEmpty &&
                   workingDays > 0)
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.primary, width: 1),
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusCard),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1231,20 +1249,28 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            AppStrings.calculatedDailyInstallment,
-                            style: TextStyle(
-                              color: AppColors.textPrimary(context),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              AppStrings.calculatedDailyInstallment,
+                              style: TextStyle(
+                                color: AppColors.onPrimary.withValues(
+                                  alpha: 0.7,
+                                ),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 12),
                           Text(
                             currencyFormatter.format(dailyInstallment),
-                            style: const TextStyle(
-                              color: AppColors.primary,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                            style: TextStyle(
+                              color: AppColors.onPrimary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w600,
+                              fontFeatures: const [
+                                FontFeature.tabularFigures(),
+                              ],
                             ),
                           ),
                         ],
@@ -1253,8 +1279,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                       Text(
                         '${AppStrings.totalDays}: $workingDays días (sin domingos)',
                         style: TextStyle(
-                          color: AppColors.textSecondary(context),
-                          fontSize: 12,
+                          color: AppColors.onPrimary.withValues(alpha: 0.6),
+                          fontSize: 13,
                         ),
                       ),
                     ],
