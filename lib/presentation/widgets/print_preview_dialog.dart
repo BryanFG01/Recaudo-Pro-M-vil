@@ -48,7 +48,7 @@ class PrintPreviewDialog extends StatelessWidget {
 
     pdf.addPage(
       pw.Page(
-        pageFormat: PdfPageFormat(
+        pageFormat: const PdfPageFormat(
             100 * PdfPageFormat.mm, 100 * PdfPageFormat.mm,
             marginAll: 3 * PdfPageFormat.mm),
         build: (pw.Context context) {
@@ -303,10 +303,10 @@ class PrintPreviewDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Encabezado
-            Center(
+            const Center(
               child: Column(
                 children: [
-                  const Text(
+                  Text(
                     'RECAUDO PRO',
                     style: TextStyle(
                       fontSize: 14,
@@ -314,8 +314,8 @@ class PrintPreviewDialog extends StatelessWidget {
                       color: Colors.black,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
+                  SizedBox(height: 4),
+                  Text(
                     'Comprobante de Pago',
                     style: TextStyle(
                       fontSize: 11,

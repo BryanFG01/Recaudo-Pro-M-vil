@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
+import 'offline_store.dart';
 import 'session_local_datasource.dart';
 
 /// Error de red con un mensaje listo para mostrar al usuario.
@@ -24,26 +25,63 @@ class NetworkException implements Exception {
 ///   cerraría la sesión) y reintenta la petición.
 /// - Si la sesión ya no se puede renovar, borra los tokens y avisa por [sessionEnded].
 /// - Toda petición tiene timeout y los errores de red se traducen a [NetworkException].
+/// - Con [OfflineStore], cada GET exitoso se guarda; sin red se responde con lo guardado (cabecera
+///   [offlineHeader]) y las listas incluyen lo que sigue en la cola de envío.
 class ApiClient {
   static const Duration defaultTimeout = Duration(seconds: 20);
 
+  /// Cabecera de las respuestas servidas desde el teléfono (sin conexión).
+  static const String offlineHeader = 'x-recaudo-offline';
+
   /// Instancia compartida por los datasources.
-  static final ApiClient instance = ApiClient(SessionLocalDataSource());
+  static final ApiClient instance = ApiClient(SessionLocalDataSource(), offline: OfflineStore.instance);
 
   final SessionLocalDataSource _session;
+  final OfflineStore? _offline;
   final http.Client _http;
   final Duration _timeout;
   final _sessionEnded = StreamController<void>.broadcast();
+  final _connectivity = StreamController<bool>.broadcast();
+  bool _isOnline = true;
   Future<bool>? _pendingRefresh;
 
-  ApiClient(this._session, {http.Client? client, Duration timeout = defaultTimeout})
-      : _http = client ?? http.Client(),
+  ApiClient(this._session, {OfflineStore? offline, http.Client? client, Duration timeout = defaultTimeout})
+      : _offline = offline,
+        _http = client ?? http.Client(),
         _timeout = timeout;
 
   /// Emite cuando la sesión terminó (vencida, revocada o cerrada en otro dispositivo).
   Stream<void> get sessionEnded => _sessionEnded.stream;
 
-  Future<http.Response> get(Uri url) => send(() => http.Request('GET', url));
+  /// Si la última petición llegó al servidor.
+  bool get isOnline => _isOnline;
+
+  /// Emite al perder (false) o recuperar (true) la conexión con el servidor.
+  Stream<bool> get connectivity => _connectivity.stream;
+
+  Future<http.Response> get(Uri url) async {
+    final offline = _offline;
+    if (offline == null) return send(() => http.Request('GET', url));
+    try {
+      final response = await send(() => http.Request('GET', url));
+      if (response.statusCode != HttpStatus.ok) return response;
+      await offline.remember(url, response.body);
+      return _jsonResponse(await offline.withPending(url, response.body));
+    } on NetworkException {
+      final saved = await offline.recall(url);
+      if (saved == null) rethrow;
+      return _jsonResponse(await offline.withPending(url, saved), {offlineHeader: '1'});
+    }
+  }
+
+  /// Como [get], pero sin conexión y sin datos guardados devuelve null en vez de fallar.
+  Future<http.Response?> tryGet(Uri url) async {
+    try {
+      return await get(url);
+    } on NetworkException {
+      return null;
+    }
+  }
 
   Future<http.Response> delete(Uri url) => send(() => http.Request('DELETE', url));
 
@@ -89,6 +127,7 @@ class ApiClient {
   Future<void> logout() async {
     final refresh = await _session.readRefreshToken();
     await _session.clearTokens();
+    await _offline?.clearCache();
     if (refresh == null) return;
     try {
       final url = Uri.parse(ApiConfig.buildApiUrl('/api/auth/logout'));
@@ -114,6 +153,7 @@ class ApiClient {
 
   Future<void> _endSession() async {
     await _session.clearTokens();
+    await _offline?.clearCache();
     _sessionEnded.add(null);
   }
 
@@ -121,15 +161,32 @@ class ApiClient {
     if (accessToken != null) request.headers['Authorization'] = 'Bearer $accessToken';
     try {
       final streamed = await _http.send(request).timeout(_timeout);
-      return await http.Response.fromStream(streamed).timeout(_timeout);
+      final response = await http.Response.fromStream(streamed).timeout(_timeout);
+      _setOnline(true);
+      return response;
     } on TimeoutException {
+      _setOnline(false);
       throw const NetworkException('El servidor tardó demasiado en responder. Inténtalo de nuevo.');
     } on SocketException {
+      _setOnline(false);
       throw const NetworkException('Sin conexión a internet. Revisa tu red e inténtalo de nuevo.');
     } on http.ClientException {
+      _setOnline(false);
       throw const NetworkException('No se pudo conectar con el servidor.');
     }
   }
+
+  void _setOnline(bool value) {
+    if (_isOnline == value) return;
+    _isOnline = value;
+    _connectivity.add(value);
+  }
+
+  static http.Response _jsonResponse(String body, [Map<String, String> headers = const {}]) => http.Response.bytes(
+        utf8.encode(body),
+        HttpStatus.ok,
+        headers: {'content-type': 'application/json; charset=utf-8', ...headers},
+      );
 
   static http.Request _withBody(String method, Uri url, Map<String, String>? headers, Object? body) {
     final request = http.Request(method, url);

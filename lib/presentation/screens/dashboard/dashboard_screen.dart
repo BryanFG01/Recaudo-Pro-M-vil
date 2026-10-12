@@ -11,6 +11,7 @@ import '../../providers/cash_session_provider.dart';
 import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
+import '../../providers/sync_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../widgets/dashboard_card.dart';
@@ -20,6 +21,11 @@ class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   Future<void> _showLogoutDialog(BuildContext context, WidgetRef ref) async {
+    final pending = ref.read(syncStatusProvider).pending;
+    final message = pending == 0
+        ? '¿Estás seguro de que deseas cerrar sesión?'
+        : 'Tienes $pending ${pending == 1 ? 'registro' : 'registros'} sin enviar por falta de conexión. '
+            'No se pierden: se enviarán cuando vuelvas a entrar con tu usuario. ¿Cerrar sesión?';
     return showDialog<void>(
       context: context,
       builder: (BuildContext dialogContext) {
@@ -37,7 +43,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ),
           content: Text(
-            '¿Estás seguro de que deseas cerrar sesión?',
+            message,
             style: TextStyle(
               color: AppColors.textSecondary(dialogContext),
               fontSize: 16,

@@ -1,10 +1,11 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../core/config/api_config.dart';
 import 'api_client.dart';
 import '../../domain/entities/payment_attempt_entity.dart';
+import 'pending_writes_sender.dart';
 
 /// POST /api/payment-attempts (status PAID o NOT_PAID).
 /// GET /api/payment-attempts?business_id=&credit_id=&client_id=&user_id=&status= para pintar en card cuotas atrasadas.
@@ -38,6 +39,7 @@ abstract class PaymentAttemptRemoteDataSource {
 class PaymentAttemptRemoteDataSourceImpl
     implements PaymentAttemptRemoteDataSource {
   final ApiClient _api = ApiClient.instance;
+  final PendingWritesSender _writes = PendingWritesSender.instance;
 
   @override
   Future<PaymentAttemptEntity> createPaymentAttempt({
@@ -52,9 +54,10 @@ class PaymentAttemptRemoteDataSourceImpl
     int accumulatedNoPaymentDays = 0,
     String? notes,
   }) async {
-    final url = ApiConfig.buildApiUrl('/api/payment-attempts');
-    // accumulated_no_payment_days siempre se envía (1, 2, 3... según cuántos NOT_PAID haya)
+    // accumulated_no_payment_days siempre se envía (1, 2, 3... según cuántos NOT_PAID haya).
+    // El id lo pone la app: reenviarlo desde la cola sin conexión no lo duplica.
     final body = <String, dynamic>{
+      'id': const Uuid().v4(),
       'credit_id': creditId,
       'client_id': clientId,
       'status': status,
@@ -62,7 +65,7 @@ class PaymentAttemptRemoteDataSourceImpl
       'business_id': businessId,
       'attempt_date': (attemptDate ?? DateTime.now()).toUtc().toIso8601String(),
       'accumulated_no_payment_days': accumulatedNoPaymentDays,
-      'notes': notes ?? 'string',
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
     };
     if (businessCode != null && businessCode.isNotEmpty) {
       body['business_code'] = businessCode;
@@ -70,21 +73,11 @@ class PaymentAttemptRemoteDataSourceImpl
     if (collectionId != null && collectionId.isNotEmpty) {
       body['collection_id'] = collectionId;
     }
-    final response = await _api.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
-    );
+    final result = await _writes.submit(path: '/api/payment-attempts', body: body, userId: userId);
+    final response = result.response;
+    if (response == null) return _fromJson(result.body);
     if (response.statusCode != 200 && response.statusCode != 201) {
-      String msg = 'Error al registrar intento de pago: ${response.statusCode}';
-      try {
-        final err = jsonDecode(response.body);
-        if (err is Map<String, dynamic>) {
-          final m = err['message'] ?? err['error'] ?? err['detail'];
-          if (m != null) msg = m is String ? m : m.toString();
-        }
-      } catch (_) {}
-      throw Exception(msg);
+      throw Exception(PendingWritesSender.errorMessage(response));
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final raw = data['data'] is Map<String, dynamic>
@@ -102,8 +95,9 @@ class PaymentAttemptRemoteDataSourceImpl
     String? status,
   }) async {
     final query = <String, String>{};
-    if (businessId != null && businessId.isNotEmpty)
+    if (businessId != null && businessId.isNotEmpty) {
       query['business_id'] = businessId;
+    }
     if (creditId != null && creditId.isNotEmpty) query['credit_id'] = creditId;
     if (clientId != null && clientId.isNotEmpty) query['client_id'] = clientId;
     if (userId != null && userId.isNotEmpty) query['user_id'] = userId;
@@ -125,13 +119,8 @@ class PaymentAttemptRemoteDataSourceImpl
   Future<List<PaymentAttemptEntity>> getPaymentAttemptsByCreditId(
       String creditId) async {
     final url = ApiConfig.buildApiUrl('/api/payment-attempts/credit/$creditId');
-    debugPrint('[PaymentAttempts] GET $url');
     final response = await _api.get(Uri.parse(url));
-    debugPrint('[PaymentAttempts] status=${response.statusCode} body=${response.body.length > 500 ? response.body.substring(0, 500) : response.body}');
-    if (response.statusCode != 200) {
-      debugPrint('[PaymentAttempts] Error: status ${response.statusCode}');
-      return [];
-    }
+    if (response.statusCode != 200) return [];
     final body = jsonDecode(response.body);
     // Manejar envelope { data: [...] } o array directo
     List<dynamic>? rawList;

@@ -144,8 +144,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
 
   /// Valor solo si existe en la lista (evita crash si el estado restaurado no coincide).
   String? get _safeDropdownValue {
-    if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty)
+    if (_selectedCategoryId == null || _selectedCategoryId!.isEmpty) {
       return null;
+    }
     final validIds = expenseCategories.map((c) => c.id).toSet();
     return validIds.contains(_selectedCategoryId) ? _selectedCategoryId : null;
   }

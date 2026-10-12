@@ -363,9 +363,9 @@ class _ClientsListScreenState extends ConsumerState<ClientsListScreen> {
                             color: AppColors.error,
                           ),
                           const SizedBox(height: 16),
-                          Text(
+                          const Text(
                             'Error al cargar clientes',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.error,
                               fontSize: 16,
                             ),

@@ -67,8 +67,9 @@ class CreditRemoteDataSourceImpl implements CreditRemoteDataSource {
   @override
   Future<CreditSummaryEntity?> getCreditSummaryById(String creditId) async {
     final url = ApiConfig.buildApiUrl('/api/credits/summary/$creditId');
-    final response = await _api.get(Uri.parse(url));
-    if (response.statusCode == 404) return null;
+    // Sin conexión y sin resumen guardado → null: la pantalla usa el saldo del crédito
+    final response = await _api.tryGet(Uri.parse(url));
+    if (response == null || response.statusCode == 404) return null;
     if (response.statusCode != 200) {
       throw Exception(
           'Error al obtener resumen del crédito: ${response.statusCode}');

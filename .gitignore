@@ -48,3 +48,6 @@ app.*.map.json
 *.freezed.dart
 *.config.dart
 
+
+# Configuración local de Claude Code (no se sube)
+.claude/

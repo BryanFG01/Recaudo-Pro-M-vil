@@ -5,8 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:RecaudoPro/data/datasources/api_client.dart';
-import 'package:RecaudoPro/data/datasources/session_local_datasource.dart';
+import 'package:recaudo_pro/data/datasources/api_client.dart';
+import 'package:recaudo_pro/data/datasources/session_local_datasource.dart';
 
 /// Sesión en memoria (en lugar del almacenamiento cifrado del dispositivo).
 class FakeSession extends SessionLocalDataSource {

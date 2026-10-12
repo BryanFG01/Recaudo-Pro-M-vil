@@ -1,4 +1,4 @@
-name: RecaudoPro
+name: recaudo_pro
 description: Aplicación de gestión de recaudo con Clean Architecture y Riverpod
 publish_to: 'none'
 version: 1.0.0+1
@@ -44,6 +44,9 @@ dependencies:
   printing: ^5.12.0
   pdf: ^3.10.7
   flutter_secure_storage: ^11.2.0
+  sentry_flutter: ^8.14.2
+  path_provider: ^2.1.6
+  http_parser: ^4.1.2
 
 dev_dependencies:
   flutter_test:
