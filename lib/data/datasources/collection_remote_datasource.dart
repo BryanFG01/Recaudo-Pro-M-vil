@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:uuid/uuid.dart';
 
 import '../../core/config/api_config.dart';
 import 'api_client.dart';
@@ -7,6 +8,7 @@ import '../../domain/entities/collection_entity.dart';
 import '../../domain/entities/dashboard_stats_entity.dart';
 import '../models/collection_model.dart';
 import 'credit_remote_datasource.dart';
+import 'pending_writes_sender.dart';
 
 abstract class CollectionRemoteDataSource {
   Future<List<CollectionEntity>> getCollections({String? businessId});
@@ -39,6 +41,7 @@ abstract class CollectionRemoteDataSource {
 
 class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
   final ApiClient _api = ApiClient.instance;
+  final PendingWritesSender _writes = PendingWritesSender.instance;
 
   CollectionRemoteDataSourceImpl([CreditRemoteDataSource? creditDataSource])
       : _creditDataSource = creditDataSource;
@@ -47,6 +50,8 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
 
   @override
   Future<void> deleteCollection(String id) async {
+    // Un cobro que no se ha enviado se cancela en el teléfono
+    if (await _writes.cancel(id)) return;
     final url = ApiConfig.buildApiUrl('/api/collections/$id');
     final response = await _api.delete(Uri.parse(url));
     if (response.statusCode != 200 && response.statusCode != 204) {
@@ -137,10 +142,9 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     CollectionEntity collection, {
     String? businessId,
   }) async {
-    final url = ApiConfig.buildApiUrl('/api/collections');
-    // Body según API: credit_id, client_id, amount, notes, user_id,
-    // payment_method, transaction_reference, opcional business_id (sin id ni payment_date)
+    // El id lo pone la app: reenviar el cobro con el mismo id no lo duplica en el backend.
     final body = <String, dynamic>{
+      'id': collection.id.isNotEmpty ? collection.id : const Uuid().v4(),
       'credit_id': collection.creditId,
       'client_id': collection.clientId,
       'amount': collection.amount,
@@ -160,23 +164,17 @@ class CollectionRemoteDataSourceImpl implements CollectionRemoteDataSource {
     if (businessId != null && businessId.isNotEmpty) {
       body['business_id'] = businessId;
     }
-    final response = await _api.post(
-      Uri.parse(url),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(body),
+    final result = await _writes.submit(
+      path: '/api/collections',
+      body: body,
+      userId: collection.userId,
+      // En cola, la hora es la del cobro (con conexión la pone el servidor)
+      queuedFields: {'payment_date': collection.paymentDate.toUtc().toIso8601String()},
     );
+    final response = result.response;
+    if (response == null) return CollectionModel.fromJson(result.body);
     if (response.statusCode != 200 && response.statusCode != 201) {
-      String message = 'Error al crear recaudo: ${response.statusCode}';
-      try {
-        final err = jsonDecode(response.body);
-        if (err is Map<String, dynamic>) {
-          final msg = err['message'] ?? err['error'] ?? err['detail'];
-          if (msg != null) message = msg is String ? msg : msg.toString();
-        }
-      } catch (_) {
-        if (response.body.isNotEmpty) message += '\n${response.body}';
-      }
-      throw Exception(message);
+      throw Exception(PendingWritesSender.errorMessage(response));
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final raw = data['data'] is Map<String, dynamic>

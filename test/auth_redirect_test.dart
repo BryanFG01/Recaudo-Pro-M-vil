@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:RecaudoPro/presentation/routes/auth_redirect.dart';
+import 'package:recaudo_pro/presentation/routes/auth_redirect.dart';
 
 void main() {
   group('authRedirect', () {

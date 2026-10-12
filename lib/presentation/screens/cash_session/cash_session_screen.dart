@@ -224,8 +224,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          if (!isActiveRoute)
+          if (!isActiveRoute) {
             ref.invalidate(cashSessionProvider(widget.sessionId));
+          }
           if (user != null) {
             if (isActiveRoute) {
               ref.invalidate(cashSessionByUserProvider(user.id));
@@ -452,8 +453,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                     ThousandsSeparatorInputFormatter(),
                   ],
                   validator: (v) {
-                    if (v == null || v.trim().isEmpty)
+                    if (v == null || v.trim().isEmpty) {
                       return 'Ingrese el monto';
+                    }
                     final n = ThousandsSeparatorInputFormatter.parse(v);
                     if (n == null || n <= 0) return 'Monto inválido';
                     return null;
@@ -494,8 +496,9 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     bool hasFlow,
   ) {
     if (hasFlow) {
-      if (flowTotalCredits != null && flowTotalCredits > 0)
+      if (flowTotalCredits != null && flowTotalCredits > 0) {
         return flowTotalCredits;
+      }
       if ((totalVentasPorSesion ?? 0) > 0) return totalVentasPorSesion!;
       // Fallback: API puede no devolver cash_session_id en créditos; usar total del summary para no quedar en 0.
       return totalVentasHoy ?? 0;

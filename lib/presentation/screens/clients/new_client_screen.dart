@@ -17,6 +17,7 @@ import '../../../core/utils/business_helper.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
+import '../../../domain/services/credit_rules.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/business_provider.dart';
 import '../../providers/cash_session_provider.dart';
@@ -184,48 +185,17 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     }
   }
 
-  // Calculate number of days excluding Sundays
-  int _calculateWorkingDays(DateTime start, DateTime end) {
-    int count = 0;
-    // Normalize to midnight to ensure accurate day counting
-    DateTime current = DateTime(start.year, start.month, start.day);
-    final DateTime endDate = DateTime(end.year, end.month, end.day);
+  // Días de cobro (sin domingos): regla en domain/services/credit_rules.dart
+  int _calculateWorkingDays(DateTime start, DateTime end) => countCollectionDays(start, end);
 
-    while (!current.isAfter(endDate)) {
-      if (current.weekday != DateTime.sunday) {
-        count++;
-      }
-      current = current.add(const Duration(days: 1));
-    }
-    return count;
-  }
-
-  // Calculate daily installment based on amount, dates, and interest
   double _calculateDailyInstallment() {
-    if (_creditAmountController.text.trim().isEmpty) return 0;
-
     // Limpiar formato: quitar comas, puntos y todo lo no numérico (500.000 / 500,000 → 500000)
-    final cleanedAmount = _creditAmountController.text.replaceAll(
-      RegExp(r'[^\d]'),
-      '',
+    final cleanedAmount = _creditAmountController.text.replaceAll(RegExp(r'[^\d]'), '');
+    return dailyInstallment(
+      amount: double.tryParse(cleanedAmount) ?? 0,
+      interestPercent: double.tryParse(_interestController.text.trim()) ?? 0,
+      collectionDays: countCollectionDays(_startDate, _endDate),
     );
-    final creditAmount = double.tryParse(cleanedAmount) ?? 0;
-    if (creditAmount <= 0) return 0;
-
-    final interest = double.tryParse(_interestController.text.trim()) ?? 0;
-
-    // Usar días hábiles (excluyendo domingos)
-    final workingDays = _calculateWorkingDays(_startDate, _endDate);
-
-    if (workingDays <= 0) return 0;
-
-    // Interés = Monto × Tasa / 100. Total a pagar = Monto + Interés
-    final interestAmount = creditAmount * interest / 100;
-    final totalToPay = creditAmount + interestAmount;
-    // Cuota diaria = Total a pagar ÷ Días totales (hábiles)
-    final dailyInstallment = totalToPay / workingDays;
-
-    return dailyInstallment;
   }
 
   @override
@@ -403,8 +373,9 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
+      if (!mounted) return;
 
       setState(() {
         _latitude = position.latitude;
@@ -457,11 +428,9 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       }
       // Si no hay negocio seleccionado (p. ej. tras esperar en la vista), usar el del usuario actual
       BusinessEntity? business = selectedBusiness;
-      if (business == null) {
-        business = await ref
+      business ??= await ref
             .read(businessRepositoryProvider)
             .getBusinessById(currentUser.businessId);
-      }
       if (business == null) {
         throw Exception(
           'Negocio no disponible. Selecciona un negocio o vuelve a entrar.',
@@ -767,7 +736,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             )),
           );
         }
-        context.pop();
+        if (mounted) context.pop();
       }
     } catch (e, st) {
       if (mounted) {

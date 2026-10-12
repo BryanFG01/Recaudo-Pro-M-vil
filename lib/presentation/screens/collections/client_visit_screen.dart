@@ -1,7 +1,7 @@
-import 'package:RecaudoPro/domain/entities/client_entity.dart';
-import 'package:RecaudoPro/domain/entities/collection_entity.dart';
-import 'package:RecaudoPro/domain/entities/credit_entity.dart';
-import 'package:RecaudoPro/domain/entities/credit_summary_entity.dart';
+import 'package:recaudo_pro/domain/entities/client_entity.dart';
+import 'package:recaudo_pro/domain/entities/collection_entity.dart';
+import 'package:recaudo_pro/domain/entities/credit_entity.dart';
+import 'package:recaudo_pro/domain/entities/credit_summary_entity.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,9 +22,10 @@ import '../../providers/client_provider.dart';
 import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
 import '../../providers/payment_attempt_provider.dart';
+import '../../providers/sync_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import '../../widgets/print_preview_dialog.dart';
+import '../../widgets/print_preview_dialog.dart';
 import '../../../core/utils/currency_format.dart';
 
 const _uuid = Uuid();
@@ -219,7 +220,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
           businessId, widget.clientId);
 
       if (client == null || credits.isEmpty) {
-        if (mounted) {
+        if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('No se pudo cargar la información para imprimir'),
@@ -250,7 +251,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         isFullPayment = _isLoadingFullPayment;
       }
 
-      if (mounted) {
+      if (context.mounted) {
         showDialog(
           context: context,
           builder: (context) => PrintPreviewDialog(
@@ -265,7 +266,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al preparar impresión: ${e.toString()}'),
@@ -419,10 +420,13 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       final finalBalance = newTotalBalance < 0 ? 0 : newTotalBalance;
       final isPaidOff = finalBalance == 0;
 
+      final savedOffline = !ref.read(syncRepositoryProvider).isOnline;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pago realizado exitosamente'),
+          SnackBar(
+            content: Text(savedOffline
+                ? 'Sin conexión: el pago quedó guardado y se enviará automáticamente'
+                : 'Pago realizado exitosamente'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -582,11 +586,12 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
         _creditId!
       };
 
+      final savedOffline = !ref.read(syncRepositoryProvider).isOnline;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'No pago registrado',
+              savedOffline ? 'Sin conexión: el "no pagó" quedó guardado y se enviará automáticamente' : 'No pago registrado',
               style: TextStyle(color: AppColors.onPrimary),
             ),
             backgroundColor: AppColors.primary,
@@ -706,9 +711,7 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
               }
 
               final credit = credits.first;
-              if (_creditId == null) {
-                _creditId = credit.id;
-              }
+              _creditId ??= credit.id;
               // Saldo restante desde API summary (disminuye con cada abono)
               final effectiveBalance =
                   summary?.totalBalance ?? credit.totalBalance;
@@ -907,7 +910,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                     const SizedBox(height: 16),
                     // Payment Method Selection
                     DropdownButtonFormField<String>(
-                      value: _paymentMethod,
+                      // La key reconstruye el campo cuando se reinicia a "Efectivo" tras un pago
+                      key: ValueKey(_paymentMethod),
+                      initialValue: _paymentMethod,
                       dropdownColor:
                           AppColors.surface(context), // Background for the menu
                       borderRadius:
@@ -1070,9 +1075,9 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
                                 size: 22,
                                 color: Colors.white,
                               ),
-                        label: Text(
+                        label: const Text(
                           'No pago',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

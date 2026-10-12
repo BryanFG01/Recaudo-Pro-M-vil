@@ -1,22 +1,40 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'core/constants/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/routes/app_router.dart';
+import 'presentation/widgets/offline_banner.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
+  // En release no se escriben logs (pueden contener datos de clientes)
+  if (kReleaseMode) debugPrint = (String? message, {int? wrapWidth}) {};
   try {
     await initializeDateFormatting('es');
   } catch (_) {
     // Si falla el locale (p. ej. en algún emulador), la app sigue con formato por defecto
   }
-  runApp(const ProviderScope(child: RecaudoProApp()));
+
+  void startApp() => runApp(const ProviderScope(child: RecaudoProApp()));
+
+  // Reporte de errores: solo si SENTRY_DSN está en .env (el DSN no es un secreto)
+  final sentryDsn = dotenv.env['SENTRY_DSN']?.trim() ?? '';
+  if (sentryDsn.isEmpty) return startApp();
+  await SentryFlutter.init(
+    (options) {
+      options.dsn = sentryDsn;
+      options.environment = kReleaseMode ? 'production' : 'development';
+      options.sendDefaultPii = false;
+    },
+    appRunner: startApp,
+  );
 }
 
 class RecaudoProApp extends ConsumerWidget {
@@ -38,7 +56,7 @@ class RecaudoProApp extends ConsumerWidget {
       // Sincroniza el color principal adaptativo (AppColors.primary/onPrimary) con el tema activo
       builder: (context, child) {
         AppColors.syncBrightness(Theme.of(context).brightness);
-        return child ?? const SizedBox.shrink();
+        return SyncBannerLayout(child: child ?? const SizedBox.shrink());
       },
     );
   }

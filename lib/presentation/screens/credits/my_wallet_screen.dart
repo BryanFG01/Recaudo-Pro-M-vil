@@ -55,7 +55,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
   Map<String, Map<String, dynamic>>? _preloadedData;
 
   /// Al ingresar a Mi cartera no se selecciona ningún filtro; la lista se muestra al elegir uno.
-  WalletFilter? _walletFilter = null;
+  WalletFilter? _walletFilter;
 
   /// Para limpiar creditsWithActionTodayProvider cuando cambia el día (la card vuelve a aparecer al otro día).
   DateTime? _lastActionDay;
@@ -250,7 +250,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
       }
 
       _currentPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
     } catch (e) {
       if (mounted) {
@@ -430,7 +430,9 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: DropdownButtonFormField<WalletFilter?>(
-            value: _walletFilter,
+            // La key reconstruye el campo si el filtro cambia desde el código
+            key: ValueKey(_walletFilter),
+            initialValue: _walletFilter,
             hint: Text(
               'Seleccione un filtro',
               style: TextStyle(color: AppColors.textSecondary(context)),
@@ -517,8 +519,8 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                     ref.read(creditsWithActionTodayProvider.notifier).state =
                         <String>{};
                     if (mounted) setState(() => _lastActionDay = today);
-                  } else if (_lastActionDay == null) {
-                    _lastActionDay = today;
+                  } else {
+                    _lastActionDay ??= today;
                   }
 
                   final creditsWithActionToday =
@@ -636,7 +638,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Center(
+      error: (err, _) => const Center(
         child: Text(
           'Error al cargar ventas',
           style: TextStyle(color: AppColors.error, fontSize: 14),
@@ -961,7 +963,7 @@ class _MyWalletScreenState extends ConsumerState<MyWalletScreen> {
                             );
                           }
                         } catch (e) {
-                          if (context.mounted) {
+                          if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
