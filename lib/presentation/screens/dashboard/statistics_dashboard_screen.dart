@@ -6,13 +6,13 @@ import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/utils/closing_balance_storage.dart';
 import '../../../domain/entities/daily_summary_by_user_entity.dart';
 import '../../../domain/entities/daily_summary_entity.dart';
+import '../../../domain/services/cash_rules.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
-import '../../providers/closing_balance_provider.dart';
-import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../providers/sync_provider.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../../core/utils/currency_format.dart';
 
 class StatisticsDashboardScreen extends ConsumerWidget {
@@ -93,39 +93,22 @@ class StatisticsDashboardScreen extends ConsumerWidget {
 
   Widget _buildContent(BuildContext context, WidgetRef ref,
       DailySummaryByUserEntity summary, String userId) {
-    final formatter =
-        AppCurrency.formatter;
+    final formatter = AppCurrency.formatter;
     final dateFormatter = DateFormat("EEE d 'de' MMMM yyyy", 'es');
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
 
-    // Item del día: el que coincida con session_date hoy; si no hay, el primero (más reciente)
-    DailySummaryEntity? todayItem;
-    for (final item in summary.items) {
-      if (item.sessionDate != null) {
-        final d = item.sessionDate!;
-        if (d.year == today.year && d.month == today.month && d.day == today.day) {
-          todayItem = item;
-          break;
-        }
-      }
-    }
-    todayItem ??= summary.items.isNotEmpty ? summary.items.first : null;
-    final totals = summary.totals;
-
-    final lastClosing = ref.watch(lastClosingDataProvider).valueOrNull;
-    // Caja actual: la única que varía durante el día (priorizar totals desde la API)
-    final double cajaActual = totals.cajaActual ?? todayItem?.cajaActual ?? 0;
-    // Caja inicial: congelada; si ya cerraste día, ese cierre es la caja inicial (hoy = la que será mañana; mañana = la de ayer)
-    final double cajaInicial = lastClosing?.balance ?? todayItem?.initialBalance ?? 0;
-    final double recaudoDelDia = totals.totalRecaudo;
-    final double gastos = totals.totalGastos;
-    final double retiros = totals.totalRetiros;
-    final double ventas = totals.totalVentas;
-    // Ingreso: totals.ingreso_actual (API) o fallback al ítem del día
-    final double ingreso = totals.totalIngresos > 0
-        ? totals.totalIngresos
-        : (todayItem?.totalIngresos ?? 0);
+    // Todas las cifras son de la caja actual (la API calcula la caja con la misma fórmula)
+    final session = currentSessionOf(summary);
+    final bool isClosed = session != null && !session.isOpen;
+    final double cajaActual = session?.cajaActual ?? 0;
+    final double cajaInicial = session?.initialBalance ?? 0;
+    // Cerrada: la caja final ya es la caja inicial con la que arranca la próxima apertura
+    final double topInitial = isClosed ? nextInitialBalance(session) : cajaInicial;
+    final double recaudo = session?.totalRecaudo ?? 0;
+    final double gastos = session?.totalGastos ?? 0;
+    final double retiros = session?.totalRetiros ?? 0;
+    final double ventas = session?.totalVentas ?? 0;
+    final double retirosPendientes = session?.totalRetirosPendientes ?? 0;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -157,10 +140,11 @@ class StatisticsDashboardScreen extends ConsumerWidget {
                   child: _buildMainCard(
                     context,
                     icon: Icons.account_balance_wallet,
-                    label: 'Caja actual',
+                    label: isClosed ? 'Caja final' : 'Caja actual',
                     value: formatter.format(cajaActual),
-                    subtitle:
-                        'Caja inicial + Recaudo - Retiros - Gastos\n- Ventas',
+                    subtitle: isClosed
+                        ? 'Guardada al cerrar la caja'
+                        : 'Caja inicial + Recaudo - Ventas\n- Retiros - Gastos',
                     valueColor:
                         cajaActual >= 0 ? AppColors.textPrimary(context) : AppColors.error,
                   ),
@@ -171,29 +155,36 @@ class StatisticsDashboardScreen extends ConsumerWidget {
                   child: _buildMainCard(
                     context,
                     label: 'Caja inicial',
-                    value: formatter.format(cajaInicial),
+                    value: formatter.format(topInitial),
+                    subtitle: isClosed ? 'Con esta inicias al abrir' : null,
                     valueColor: AppColors.textPrimary(context),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
+            _buildSessionStatus(context, session),
+            const SizedBox(height: 12),
 
-            // Botón Cerrar día
-            _buildCloseDayButton(context, ref, userId, todayItem, cajaActual),
+            // Abrir o cerrar caja según su estado
+            _buildSessionButton(context, ref, userId, session),
             const SizedBox(height: 20),
 
-            // Filas de detalle
-            _buildDetailRow(context, 'Recaudo del día', formatter.format(recaudoDelDia)),
-            _buildDetailRow(context, 'Gastos', formatter.format(gastos)),
-            _buildDetailRow(context, 'Retiros', formatter.format(retiros)),
-            _buildDetailRow(
-                context, 'Ventas (lo que se presta)', formatter.format(ventas)),
-            // Ingreso solo se muestra cuando hay ingreso; al cerrar caja no se muestra (0 o sin dato)
-            if (ingreso > 0)
-              _buildDetailRow(context, 'Ingreso', formatter.format(ingreso)),
-            _buildDetailRow(
-                context, 'Caja inicial', formatter.format(cajaInicial)),
+            // Filas de detalle (de la caja actual o de la que se cerró): cuadran con la cifra de arriba
+            if (isClosed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('Detalle de la caja cerrada',
+                    style: TextStyle(color: AppColors.textSecondary(context), fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            _buildDetailRow(context, 'Caja inicial', formatter.format(cajaInicial)),
+            _buildDetailRow(context, '+ Recaudo', formatter.format(recaudo)),
+            _buildDetailRow(context, '− Ventas (lo que se presta)', formatter.format(ventas)),
+            _buildDetailRow(context, '− Retiros aprobados', formatter.format(retiros)),
+            _buildDetailRow(context, '− Gastos', formatter.format(gastos)),
+            if (retirosPendientes > 0)
+              _buildDetailRow(context, 'Retiros por aprobar (aún no restan)',
+                  formatter.format(retirosPendientes)),
             const SizedBox(height: 28),
 
             // Módulos
@@ -294,10 +285,38 @@ class StatisticsDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCloseDayButton(BuildContext context, WidgetRef ref,
-      String userId, DailySummaryEntity? todayItem, double cajaActualToUse) {
+  /// "Caja abierta · desde el 12 oct" o "Caja cerrada a las 6:40 p. m. · caja final $X".
+  Widget _buildSessionStatus(BuildContext context, DailySummaryEntity? session) {
+    final String text;
+    final Color color;
+    if (session == null) {
+      text = 'No tienes una caja abierta';
+      color = AppColors.textSecondary(context);
+    } else if (session.isOpen) {
+      final since = session.sessionDate == null ? '' : ' · del ${DateFormat("d 'de' MMMM", 'es').format(session.sessionDate!)}';
+      text = 'Caja abierta$since';
+      color = AppColors.success;
+    } else {
+      final at = session.closedAt == null ? '' : ' a las ${DateFormat.jm('es').format(session.closedAt!.toLocal())}';
+      final closing = AppCurrency.format(session.closingBalance ?? session.cajaActual);
+      text = 'Caja cerrada$at · caja final $closing';
+      color = AppColors.textSecondary(context);
+    }
+    return Row(
+      children: [
+        Icon(session?.isOpen == true ? Icons.lock_open : Icons.lock_outline, size: 16, color: color),
+        const SizedBox(width: 6),
+        Expanded(child: Text(text, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w500))),
+      ],
+    );
+  }
+
+  Widget _buildSessionButton(BuildContext context, WidgetRef ref, String userId, DailySummaryEntity? session) {
+    final isOpen = session?.isOpen == true;
     return InkWell(
-      onTap: () => _showCloseDayDialog(context, ref, userId, todayItem, cajaActualToUse),
+      onTap: () => isOpen
+          ? _closeSession(context, ref, userId, session!)
+          : _openSession(context, ref, userId, session),
       borderRadius: BorderRadius.circular(AppTheme.radiusControl),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
@@ -309,12 +328,12 @@ class StatisticsDashboardScreen extends ConsumerWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.lock_clock,
+            Icon(isOpen ? Icons.lock_clock : Icons.lock_open,
                 color: AppColors.textPrimary(context), size: 20),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                'Cerrar día (caja actual \u2192 caja inicial mañana)',
+                isOpen ? 'Cerrar caja' : 'Abrir caja',
                 style: TextStyle(
                   color: AppColors.textPrimary(context),
                   fontSize: 14,
@@ -328,69 +347,84 @@ class StatisticsDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showCloseDayDialog(BuildContext context, WidgetRef ref,
-      String userId, DailySummaryEntity? todayItem, double cajaActualToUse) async {
-    final formatter =
-        AppCurrency.formatter;
-    final cajaActual = cajaActualToUse;
+  /// Cerrar: valida que no queden cobros sin enviar ni retiros por aprobar y confirma con el detalle.
+  Future<void> _closeSession(BuildContext context, WidgetRef ref, String userId, DailySummaryEntity session) async {
+    final blocker = closeCashBlocker(
+      pendingSync: ref.read(syncStatusProvider).pending,
+      pendingWithdrawals: session.totalRetirosPendientes,
+    );
+    if (blocker != null) {
+      _showMessage(context, blocker, AppColors.error);
+      return;
+    }
+    final formatter = AppCurrency.formatter;
+    final confirmed = await _confirm(
+      context,
+      title: 'Cerrar caja',
+      message: 'Caja inicial ${formatter.format(session.initialBalance)}\n'
+          '+ Recaudo ${formatter.format(session.totalRecaudo)}\n'
+          '− Ventas ${formatter.format(session.totalVentas)}\n'
+          '− Retiros ${formatter.format(session.totalRetiros)}\n'
+          '− Gastos ${formatter.format(session.totalGastos)}\n\n'
+          'Caja final: ${formatter.format(session.cajaActual)}\n\n'
+          'Será la caja inicial de tu próxima caja. Si necesitas seguir trabajando hoy puedes volver a abrirla.',
+    );
+    if (!confirmed || !context.mounted) return;
+    try {
+      await ref.read(cashSessionActionsProvider).close(userId, session.cashSessionId);
+      if (context.mounted) _showMessage(context, 'Caja cerrada.', AppColors.success);
+    } catch (e) {
+      if (context.mounted) _showMessage(context, e.toString().replaceFirst('Exception: ', ''), AppColors.error);
+    }
+  }
 
+  /// Abrir: caja nueva (a cualquier hora) con caja inicial = caja final de la anterior.
+  Future<void> _openSession(BuildContext context, WidgetRef ref, String userId, DailySummaryEntity? last) async {
+    final formatter = AppCurrency.formatter;
+    final message = last == null
+        ? 'Se abrirá tu caja para registrar cobros, ventas, gastos y retiros.'
+        : 'Se abrirá una caja nueva con caja inicial ${formatter.format(nextInitialBalance(last))} '
+            '(tu caja final). Si el administrador te recarga, se suma a esa caja inicial.';
+    final confirmed = await _confirm(context, title: 'Abrir caja', message: message);
+    if (!confirmed || !context.mounted) return;
+    try {
+      final opened = await ref.read(cashSessionActionsProvider).open(userId);
+      if (context.mounted) {
+        _showMessage(context, 'Caja abierta · caja inicial ${formatter.format(opened.initialBalance)}', AppColors.success);
+      }
+    } catch (e) {
+      if (context.mounted) _showMessage(context, e.toString().replaceFirst('Exception: ', ''), AppColors.error);
+    }
+  }
+
+  Future<bool> _confirm(BuildContext context, {required String title, required String message}) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface(ctx),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusCard)),
-        title: Text(
-          'Cerrar día',
-          style: TextStyle(
-            color: AppColors.textPrimary(ctx),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: Text(
-          'Se guardará la caja actual (${formatter.format(cajaActual)}) como caja inicial para mañana.\n\n¿Deseas continuar?',
-          style: TextStyle(color: AppColors.textSecondary(ctx)),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusCard)),
+        title: Text(title, style: TextStyle(color: AppColors.textPrimary(ctx), fontWeight: FontWeight.w600)),
+        content: Text(message, style: TextStyle(color: AppColors.textSecondary(ctx))),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text(AppStrings.cancel,
-                style: TextStyle(color: AppColors.textSecondary(ctx))),
+            child: Text(AppStrings.cancel, style: TextStyle(color: AppColors.textSecondary(ctx))),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: Text(AppStrings.confirm,
-                style: TextStyle(
-                    color: AppColors.textPrimary(ctx),
-                    fontWeight: FontWeight.w600)),
+                style: TextStyle(color: AppColors.textPrimary(ctx), fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
+    return confirmed == true;
+  }
 
-    if (confirmed == true && context.mounted) {
-      final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final totals = ref.read(dailySummaryByUserProvider(userId)).valueOrNull?.totals;
-      await saveClosingBalance(
-        userId,
-        cajaActual,
-        today,
-        recaudo: todayItem?.totalRecaudo ?? totals?.totalRecaudo ?? 0,
-        retiros: todayItem?.totalRetiros ?? totals?.totalRetiros ?? 0,
-        ventas: todayItem?.totalVentas ?? totals?.totalVentas ?? 0,
-        gastos: todayItem?.totalGastos ?? totals?.totalGastos ?? 0,
-        ingreso: todayItem?.totalIngresos ?? totals?.totalIngresos ?? 0,
-      );
-      ref.invalidate(lastClosingDataProvider);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Día cerrado correctamente.'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-      }
-    }
+  void _showMessage(BuildContext context, String message, Color color) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
   }
 
   Widget _buildDetailRow(BuildContext context, String label, String value) {

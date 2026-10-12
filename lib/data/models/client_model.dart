@@ -44,7 +44,7 @@ class ClientModel extends ClientEntity {
 
   static DateTime? _parseDate(dynamic value) {
     if (value == null) return null;
-    if (value is String) return DateTime.tryParse(value);
+    if (value is String) return DateTime.tryParse(value)?.toLocal();
     return null;
   }
 

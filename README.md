@@ -27,7 +27,21 @@ flutter analyze             # debe quedar en "No issues found!"
 flutter test
 ```
 
-Para probar contra la API local: levanta `docker-compose.dev.yml` en la raíz del proyecto y usa `BASE_BACK=http://10.0.2.2:3001`. HTTP sin cifrar solo se permite hacia `10.0.2.2` y `localhost` (`android/app/src/main/res/xml/network_security_config.xml`).
+### Contra la API local (Docker)
+
+Levanta `docker-compose.dev.yml` en la raíz del proyecto (la API queda en el puerto 3001) y pasa la URL al correr la app. No hace falta tocar `.env`: `--dart-define` tiene prioridad.
+
+```bash
+# Emulador de Android (10.0.2.2 es el PC visto desde el emulador)
+flutter run --dart-define=BASE_BACK=http://10.0.2.2:3001
+
+# Teléfono físico en la misma Wi-Fi que el PC (IP del PC: ipconfig → Wi-Fi)
+flutter run --dart-define=BASE_BACK=http://192.168.40.8:3001
+```
+
+- Las compilaciones de debug permiten HTTP (`android/app/src/debug/res/xml/network_security_config.xml`). El release solo permite HTTPS.
+- Si el teléfono no conecta, abre `http://<IP del PC>:3001/api/health` en el navegador del teléfono. Si no carga, el problema es la red: el teléfono debe estar en la misma Wi-Fi y el firewall de Windows tiene que dejar pasar a Docker.
+- Usuario de prueba del seed: negocio `DEMO`, cobrador `COB001`, clave `Cobrador123*`.
 
 ## Arquitectura
 

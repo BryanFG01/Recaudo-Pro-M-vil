@@ -10,6 +10,12 @@ void main() {
         'https://api.recaudopro.cloud/api/businesses?code=DEMO%201');
   });
 
+  test('--dart-define tiene prioridad sobre .env (API local sin tocar .env)', () {
+    expect(ApiConfig.resolveBaseUrl(compiled: 'http://192.168.40.8:3001/', fromEnv: 'https://api.recaudopro.cloud'),
+        'http://192.168.40.8:3001');
+    expect(ApiConfig.resolveBaseUrl(compiled: '', fromEnv: 'https://api.recaudopro.cloud/'), 'https://api.recaudopro.cloud');
+  });
+
   test('sin BASE_BACK falla con un error claro (no usa un backend por defecto)', () {
     dotenv.testLoad(fileInput: 'OTRA=1');
     expect(() => ApiConfig.baseUrl, throwsA(isA<StateError>()));

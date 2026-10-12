@@ -10,6 +10,8 @@ class WithdrawalModel extends WithdrawalEntity {
     required super.isApproved,
     super.createdAt,
     super.approvedAt,
+    super.kind,
+    super.isRejected,
   });
 
   factory WithdrawalModel.fromJson(Map<String, dynamic> json) {
@@ -22,18 +24,15 @@ class WithdrawalModel extends WithdrawalEntity {
       reason: json['reason'] as String? ?? '',
       isApproved:
           json['is_approved'] as bool? ?? json['isApproved'] as bool? ?? false,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : json['createdAt'] != null
-              ? DateTime.parse(json['createdAt'] as String)
-              : null,
-      approvedAt: json['approved_at'] != null
-          ? DateTime.parse(json['approved_at'] as String)
-          : json['approvedAt'] != null
-              ? DateTime.parse(json['approvedAt'] as String)
-              : null,
+      // La API envía UTC: se pasa a la hora del teléfono para mostrarla (antes salía 5 h adelantada)
+      createdAt: _localDate(json['created_at'] ?? json['createdAt']),
+      kind: json['kind'] as String? ?? 'withdrawal',
+      isRejected: json['is_rejected'] as bool? ?? false,
+      approvedAt: _localDate(json['approved_at'] ?? json['approvedAt']),
     );
   }
+
+  static DateTime? _localDate(dynamic v) => v is String ? DateTime.tryParse(v)?.toLocal() : null;
 
   static double _num(dynamic v) {
     if (v == null) return 0.0;

@@ -94,10 +94,8 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       final category = _findCategory(_selectedCategoryId);
       final categoryName = category?.name ?? 'General';
       final reasonText = _reasonController.text.trim();
-      // Concatenamos categoría en el motivo para que el admin lo identifique en retiros
-      final finalReason = reasonText.isEmpty
-          ? '[GASTO] $categoryName'
-          : '[GASTO] $categoryName: $reasonText';
+      // La categoría va en el motivo; el tipo "expense" lo separa de los retiros y resta de la caja al registrarse
+      final finalReason = reasonText.isEmpty ? categoryName : '$categoryName: $reasonText';
 
       final useCase = ref.read(createWithdrawalUseCaseProvider);
       await useCase(
@@ -106,6 +104,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
         amount: amount.toDouble(),
         reason: finalReason,
         isApproved: false,
+        kind: 'expense',
       );
 
       _amountController.clear();
@@ -114,6 +113,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
       // Invalidar proveedores para refrescar datos en Caja y Reportes
       ref.invalidate(withdrawalsByUserProvider(user.id));
       ref.invalidate(cashSessionFlowProvider(cashSession.id));
+      ref.invalidate(dailySummaryByUserProvider(user.id));
 
       if (mounted) {
         setState(() {

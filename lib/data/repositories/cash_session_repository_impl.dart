@@ -33,6 +33,7 @@ class CashSessionRepositoryImpl implements CashSessionRepository {
     required double amount,
     required String reason,
     bool isApproved = false,
+    String kind = 'withdrawal',
   }) {
     return remoteDataSource.createWithdrawal(
       cashSessionId: cashSessionId,
@@ -40,8 +41,15 @@ class CashSessionRepositoryImpl implements CashSessionRepository {
       amount: amount,
       reason: reason,
       isApproved: isApproved,
+      kind: kind,
     );
   }
+
+  @override
+  Future<CashSessionEntity> openCashSession() => remoteDataSource.openCashSession();
+
+  @override
+  Future<CashSessionEntity> closeCashSession(String sessionId) => remoteDataSource.closeCashSession(sessionId);
 
   @override
   Future<WithdrawalsDataEntity> getWithdrawalsByUser(String userId) {

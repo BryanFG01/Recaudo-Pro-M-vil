@@ -23,6 +23,7 @@ import '../../providers/collection_provider.dart';
 import '../../providers/credit_provider.dart';
 import '../../providers/payment_attempt_provider.dart';
 import '../../providers/sync_provider.dart';
+import '../../../domain/services/credit_rules.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/print_preview_dialog.dart';
@@ -367,10 +368,17 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       if (currentUser == null) {
         throw Exception('Usuario no autenticado');
       }
+      // Con la caja cerrada el cobro no entraría en ninguna caja
+      final cashBlocker = await cashMovementBlocker(ref, currentUser.id);
+      if (cashBlocker != null) throw Exception(cashBlocker);
 
-      // Para cuota completa, usar el monto de la cuota diaria
+      // Saldo restante desde summary (API) o crédito
+      final effectiveBalance =
+          _creditSummary?.totalBalance ?? credit.totalBalance;
+
+      // Cuota completa: en pesos enteros y sin pasarse del saldo (la última cuota cierra exacto)
       final amount = isFullPayment
-          ? credit.installmentAmount
+          ? fullInstallmentPayment(installmentAmount: credit.installmentAmount, balance: effectiveBalance)
           : ThousandsSeparatorInputFormatter.parse(
                   _amountController.text.trim()) ??
               0;
@@ -378,10 +386,6 @@ class _ClientVisitScreenState extends ConsumerState<ClientVisitScreen> {
       if (amount <= 0) {
         throw Exception('El monto debe ser mayor a cero');
       }
-
-      // Saldo restante desde summary (API) o crédito
-      final effectiveBalance =
-          _creditSummary?.totalBalance ?? credit.totalBalance;
       if (amount > effectiveBalance) {
         throw Exception('El monto excede el saldo restante del préstamo');
       }

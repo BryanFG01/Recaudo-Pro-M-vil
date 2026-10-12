@@ -9,6 +9,9 @@ import 'core/constants/app_colors.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/providers/theme_provider.dart';
 import 'presentation/routes/app_router.dart';
+import 'domain/entities/app_notification_entity.dart';
+import 'presentation/providers/notification_provider.dart';
+import 'presentation/widgets/notification_toast.dart';
 import 'presentation/widgets/offline_banner.dart';
 
 Future<void> main() async {
@@ -46,9 +49,12 @@ class RecaudoProApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
+    // Avisos del panel (retiro aprobado, gasto rechazado, caja cerrada...) en cualquier pantalla
+    ref.listen<List<AppNotificationEntity>>(notificationWatcherProvider, (_, incoming) => showNotificationToast(incoming));
     return MaterialApp.router(
       title: 'RecaudoPro',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: appMessengerKey,
       theme: _lightTheme,
       darkTheme: _darkTheme,
       themeMode: themeMode,

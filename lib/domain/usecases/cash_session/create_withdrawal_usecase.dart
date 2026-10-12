@@ -12,6 +12,7 @@ class CreateWithdrawalUseCase {
     required double amount,
     required String reason,
     bool isApproved = false,
+    String kind = 'withdrawal',
   }) {
     return repository.createWithdrawal(
       cashSessionId: cashSessionId,
@@ -19,6 +20,7 @@ class CreateWithdrawalUseCase {
       amount: amount,
       reason: reason,
       isApproved: isApproved,
+      kind: kind,
     );
   }
 }

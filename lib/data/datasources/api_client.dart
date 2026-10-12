@@ -65,7 +65,11 @@ class ApiClient {
     try {
       final response = await send(() => http.Request('GET', url));
       if (response.statusCode != HttpStatus.ok) return response;
-      await offline.remember(url, response.body);
+      try {
+        await offline.remember(url, response.body);
+      } catch (_) {
+        // La caché es una ayuda: si no se puede guardar, la respuesta del servidor igual sirve
+      }
       return _jsonResponse(await offline.withPending(url, response.body));
     } on NetworkException {
       final saved = await offline.recall(url);

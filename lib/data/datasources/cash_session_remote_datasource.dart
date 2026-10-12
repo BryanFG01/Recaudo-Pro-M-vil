@@ -27,13 +27,21 @@ abstract class CashSessionRemoteDataSource {
 
   /// Sesión de caja del usuario para pintar saldo inicial (GET /api/cash-sessions/user/{userId}). 404 → null.
   Future<CashSessionEntity?> getCashSessionByUserId(String userId);
+  /// [kind]: 'withdrawal' (retiro: resta al aprobarse) o 'expense' (gasto: resta al registrarse).
   Future<WithdrawalEntity> createWithdrawal({
     required String cashSessionId,
     required String userId,
     required double amount,
     required String reason,
     bool isApproved = false,
+    String kind = 'withdrawal',
   });
+
+  /// POST /api/cash-sessions/open: abre (o reabre si es de hoy) la caja del usuario.
+  Future<CashSessionEntity> openCashSession();
+
+  /// POST /api/cash-sessions/{id}/close: guarda la caja actual como caja final.
+  Future<CashSessionEntity> closeCashSession(String sessionId);
 
   /// GET /api/withdrawals/user/{userId}. Puede devolver array o objeto con withdrawals + initial_balance, current_balance.
   Future<WithdrawalsDataEntity> getWithdrawalsByUser(String userId);
@@ -117,6 +125,7 @@ class CashSessionRemoteDataSourceImpl implements CashSessionRemoteDataSource {
     required double amount,
     required String reason,
     bool isApproved = false,
+    String kind = 'withdrawal',
   }) async {
     final url = ApiConfig.buildApiUrl('/api/withdrawals');
     final body = {
@@ -125,6 +134,7 @@ class CashSessionRemoteDataSourceImpl implements CashSessionRemoteDataSource {
       'amount': amount,
       'reason': reason,
       'is_approved': isApproved,
+      'kind': kind,
     };
     final response = await _api.post(
       Uri.parse(url),
@@ -147,6 +157,30 @@ class CashSessionRemoteDataSourceImpl implements CashSessionRemoteDataSource {
         ? data['data'] as Map<String, dynamic>
         : data;
     return WithdrawalModel.fromJson(raw);
+  }
+
+  @override
+  Future<CashSessionEntity> openCashSession() =>
+      _sessionAction(ApiConfig.buildApiUrl('/api/cash-sessions/open'), 'abrir');
+
+  @override
+  Future<CashSessionEntity> closeCashSession(String sessionId) =>
+      _sessionAction(ApiConfig.buildApiUrl('/api/cash-sessions/$sessionId/close'), 'cerrar');
+
+  /// Abrir y cerrar caja necesitan conexión: el cierre queda en el servidor para el administrador.
+  Future<CashSessionEntity> _sessionAction(String url, String verb) async {
+    final response = await _api.post(Uri.parse(url), body: jsonEncode(<String, dynamic>{}));
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      String message = 'No se pudo $verb la caja (${response.statusCode})';
+      try {
+        final err = jsonDecode(response.body);
+        if (err is Map<String, dynamic> && err['message'] != null) message = err['message'].toString();
+      } on FormatException {
+        // cuerpo no JSON: se deja el mensaje genérico
+      }
+      throw Exception(message);
+    }
+    return CashSessionModel.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   @override

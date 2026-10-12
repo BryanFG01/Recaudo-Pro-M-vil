@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'local_file_store.dart';
 import 'offline_lookup.dart';
 
@@ -58,7 +60,8 @@ class PendingWrite {
 class OfflineStore {
   OfflineStore(this._files);
 
-  static final OfflineStore instance = OfflineStore(AppSupportFileStore());
+  /// En el navegador no hay carpeta de la app (path_provider): ahí la caché vive en memoria.
+  static final OfflineStore instance = OfflineStore(kIsWeb ? MemoryFileStore() : AppSupportFileStore());
 
   static const String _outboxFile = 'outbox.json';
 

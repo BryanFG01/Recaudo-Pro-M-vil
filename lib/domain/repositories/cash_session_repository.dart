@@ -14,7 +14,14 @@ abstract class CashSessionRepository {
     required double amount,
     required String reason,
     bool isApproved = false,
+    String kind = 'withdrawal',
   });
+
+  /// Abre (o reabre si es de hoy) la caja del usuario.
+  Future<CashSessionEntity> openCashSession();
+
+  /// Cierra la caja: la caja actual queda como caja final (la inicial de la siguiente).
+  Future<CashSessionEntity> closeCashSession(String sessionId);
   Future<WithdrawalsDataEntity> getWithdrawalsByUser(String userId);
   Future<DailySummaryByUserEntity> getDailySummaryByUserId(String userId);
   Future<List<WithdrawalEntity>> getWithdrawalsBySession({

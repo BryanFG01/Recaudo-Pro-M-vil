@@ -17,6 +17,18 @@ class DailySummaryEntity extends Equatable {
   final double totalGastos;
   final double cajaActual;
 
+  /// open | closed.
+  final String status;
+  final DateTime? closedAt;
+
+  /// Caja final guardada al cerrar.
+  final double? closingBalance;
+
+  /// Retiros esperando aprobación (aún no restan de la caja).
+  final double totalRetirosPendientes;
+
+  bool get isOpen => status == 'open';
+
   const DailySummaryEntity({
     required this.cashSessionId,
     this.userId,
@@ -30,6 +42,10 @@ class DailySummaryEntity extends Equatable {
     this.totalRetiros = 0,
     this.totalGastos = 0,
     this.cajaActual = 0,
+    this.status = 'open',
+    this.closedAt,
+    this.closingBalance,
+    this.totalRetirosPendientes = 0,
   });
 
   @override
@@ -46,5 +62,9 @@ class DailySummaryEntity extends Equatable {
         totalRetiros,
         totalGastos,
         cajaActual,
+        status,
+        closedAt,
+        closingBalance,
+        totalRetirosPendientes,
       ];
 }

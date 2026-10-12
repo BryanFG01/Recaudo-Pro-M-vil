@@ -14,6 +14,10 @@ class DailySummaryModel extends DailySummaryEntity {
     super.totalRetiros,
     super.totalGastos,
     super.cajaActual,
+    super.status,
+    super.closedAt,
+    super.closingBalance,
+    super.totalRetirosPendientes,
   });
 
   factory DailySummaryModel.fromJson(Map<String, dynamic> json) {
@@ -31,6 +35,10 @@ class DailySummaryModel extends DailySummaryEntity {
       totalRetiros: _num(json['total_retiros'] ?? json['totalRetiros']),
       totalGastos: _num(json['total_gastos'] ?? json['totalGastos']),
       cajaActual: _num(json['caja_actual'] ?? json['cajaActual']),
+      status: (json['status'] as String?) ?? 'open',
+      closedAt: _date(json['closed_at']),
+      closingBalance: json['closing_balance'] == null ? null : _num(json['closing_balance']),
+      totalRetirosPendientes: _num(json['total_retiros_pendientes']),
     );
   }
 

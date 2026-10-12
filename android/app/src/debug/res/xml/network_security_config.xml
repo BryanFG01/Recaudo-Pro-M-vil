@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo compilaciones de depuración: permite HTTP para probar contra la API local desde un
+     teléfono en la misma Wi-Fi (http://<IP del PC>:3001). El release usa src/main (solo HTTPS). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

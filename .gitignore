@@ -49,5 +49,5 @@ app.*.map.json
 *.config.dart
 
 
-# Configuración local de Claude Code (no se sube)
+# ConfiguraciÃ³n local de Claude Code (no se sube)
 .claude/

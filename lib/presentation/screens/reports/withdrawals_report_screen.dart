@@ -10,7 +10,7 @@ import '../../../domain/entities/withdrawal_entity.dart';
 import '../../../domain/entities/withdrawals_data_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
-import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../../core/utils/currency_format.dart';
 
 /// Reporte de retiros: solo la lista de retiros. El resumen (caja, ingresos, egresos, etc.) está en la vista principal de Reportes.
@@ -78,9 +78,9 @@ class WithdrawalsReportScreen extends ConsumerWidget {
               },
               child: withdrawalsAsync.when(
                 data: (withdrawalsData) {
-                  // Excluimos los que son gastos (marcados con [GASTO]) para que el reporte sea solo de retiros
+                  // Excluimos los gastos para que el reporte sea solo de retiros
                   final retirosOnly = withdrawalsData.withdrawals
-                      .where((w) => !w.reason.startsWith('[GASTO]'))
+                      .where((w) => !w.isExpense)
                       .toList();
                   return _buildWithdrawalsList(
                     context,
@@ -108,6 +108,12 @@ class WithdrawalsReportScreen extends ConsumerWidget {
       bottomNavigationBar: const AppBottomNavigationBar(currentIndex: 1),
     );
   }
+
+  static Color _statusColor(WithdrawalStatus status) => switch (status) {
+        WithdrawalStatus.applied => AppColors.success,
+        WithdrawalStatus.pending => AppColors.warning,
+        WithdrawalStatus.rejected => AppColors.error,
+      };
 
   Widget _buildWithdrawalsList(
     BuildContext context,
@@ -185,19 +191,19 @@ class WithdrawalsReportScreen extends ConsumerWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: w.isApproved
-                      ? AppColors.success.withValues(alpha: 0.15)
-                      : AppColors.warning.withValues(alpha: 0.15),
+                  color: _statusColor(w.status).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  w.isApproved
-                      ? AppStrings.approved
-                      : AppStrings.pendingApproval,
+                  switch (w.status) {
+                    WithdrawalStatus.applied => AppStrings.approved,
+                    WithdrawalStatus.pending => AppStrings.pendingApproval,
+                    WithdrawalStatus.rejected => 'Rechazado',
+                  },
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: w.isApproved ? AppColors.success : AppColors.warning,
+                    color: _statusColor(w.status),
                   ),
                 ),
               ),

@@ -10,7 +10,7 @@ import '../../../domain/entities/withdrawal_entity.dart';
 import '../../../domain/entities/withdrawals_data_entity.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cash_session_provider.dart';
-import '../../widgets/app_bottom_navigation_bar.dart';
+import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../../core/utils/currency_format.dart';
 
 /// Reporte de gastos: solo la lista de gastos (como Retiros). El registro de gasto está en Gastos.
@@ -69,9 +69,9 @@ class ExpensesReportScreen extends ConsumerWidget {
           ? const Center(child: Text('Inicia sesión para ver el reporte'))
           : withdrawalsAsync.when(
               data: (data) {
-                // Filtramos solo los que son gastos (marcados con [GASTO])
+                // Solo los gastos (por tipo, o los anteriores marcados con [GASTO])
                 final expenses = data.withdrawals
-                    .where((w) => w.reason.startsWith('[GASTO]'))
+                    .where((w) => w.isExpense)
                     .toList();
                 return _buildExpensesList(context, expenses);
               },
@@ -112,8 +112,11 @@ class ExpensesReportScreen extends ConsumerWidget {
       itemCount: list.length,
       itemBuilder: (context, index) {
         final w = list[index];
-        // Limpiamos el prefijo [GASTO] del motivo para mostrarlo bonito
-        final displayReason = w.reason.replaceFirst('[GASTO] ', '');
+        final displayReason = w.displayReason;
+        final isRejected = w.status == WithdrawalStatus.rejected;
+        final statusColor = isRejected ? AppColors.error : AppColors.success;
+        // Ya resta de la caja; "Aprobado" cuando el administrador lo revisó
+        final statusText = isRejected ? 'Rechazado' : (w.isApproved ? 'Aprobado' : 'Descontado');
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
@@ -161,19 +164,16 @@ class ExpensesReportScreen extends ConsumerWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: w.isApproved
-                      ? AppColors.success.withValues(alpha: 0.15)
-                      : AppColors.warning.withValues(alpha: 0.15),
+                  color: statusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(999),
                 ),
+                // El gasto resta de la caja al registrarse; solo deja de restar si se rechaza
                 child: Text(
-                  w.isApproved
-                      ? AppStrings.approved
-                      : AppStrings.pendingApproval,
+                  statusText,
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: w.isApproved ? AppColors.success : AppColors.warning,
+                    color: statusColor,
                   ),
                 ),
               ),

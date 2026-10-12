@@ -10,7 +10,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/client_entity.dart';
 import '../../domain/entities/collection_entity.dart';
-import '../../domain/entities/credit_entity.dart';
+import '../../domain/entities/credit_entity.dart';
+import '../../domain/services/credit_rules.dart';
 import '../../core/utils/currency_format.dart';
 
 class PrintPreviewDialog extends StatelessWidget {
@@ -34,6 +35,46 @@ class PrintPreviewDialog extends StatelessWidget {
     this.showOverdueInstallments = true,
   });
 
+  /// Saldo y cuota con todos los pagos (más el pago en pantalla si aún no se guardó): el listado
+  /// de créditos no trae el saldo real. Mismo cálculo en la vista previa y en el PDF.
+  ReceiptFigures get _figures => receiptFigures(
+        totalAmount: credit.totalAmount,
+        totalInterest: credit.totalInterest,
+        installmentAmount: credit.installmentAmount,
+        totalInstallments: credit.totalInstallments,
+        paid: collections.fold<double>(0, (sum, c) => sum + c.amount) + (pendingPaymentAmount ?? 0),
+      );
+
+  static String _installmentText(ReceiptFigures f) => f.installmentNumber == 0
+      ? 'Sin pagos'
+      : 'Cuota ${f.installmentNumber} de ${f.totalInstallments}${f.isPartialInstallment ? ' (abono)' : ''}';
+
+  /// Filas del crédito (etiqueta, valor, en negrita) comunes a la vista previa y al PDF.
+  List<(String, String, bool)> _creditRows(ReceiptFigures f) {
+    final formatter = AppCurrency.formatter;
+    return [
+      ('Monto Prestado:', formatter.format(credit.totalAmount), true),
+      if ((credit.totalInterest ?? 0) > 0) ('Interés:', formatter.format(credit.totalInterest), false),
+      ('Total a Pagar:', formatter.format(f.totalToPay), false),
+      ('Total Pagado:', formatter.format(f.paid), false),
+      ('Valor Cuota:', formatter.format(credit.installmentAmount), false),
+      ('Cuota Pagada:', _installmentText(f), true),
+      ('Cuotas Pendientes:', '${f.pendingInstallments}', false),
+    ];
+  }
+
+  /// Fila "etiqueta ........ valor" del comprobante.
+  static pw.Widget _receiptRow(String label, String value, {bool bold = false}) => pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 1),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(label, style: const pw.TextStyle(fontSize: 8)),
+            pw.Text(value, style: pw.TextStyle(fontSize: 8, fontWeight: bold ? pw.FontWeight.bold : null)),
+          ],
+        ),
+      );
+
   Future<Uint8List> _generatePdf() async {
     final pdf = pw.Document();
     final formatter = AppCurrency.formatter;
@@ -45,11 +86,13 @@ class PrintPreviewDialog extends StatelessWidget {
     final paymentAmount = pendingPaymentAmount ?? 0.0;
     final isOverdue = credit.overdueInstallments > 0;
     final isLargerThanInstallment = paymentAmount > credit.installmentAmount;
+    final figures = _figures;
 
     pdf.addPage(
       pw.Page(
+        // Ancho de 100 mm y alto según el contenido (rollo de impresora térmica): no se corta
         pageFormat: const PdfPageFormat(
-            100 * PdfPageFormat.mm, 100 * PdfPageFormat.mm,
+            100 * PdfPageFormat.mm, double.infinity,
             marginAll: 3 * PdfPageFormat.mm),
         build: (pw.Context context) {
           return pw.Column(
@@ -110,52 +153,25 @@ class PrintPreviewDialog extends StatelessWidget {
                 ),
               ),
               pw.SizedBox(height: 2),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Monto Prestado:',
-                    style: const pw.TextStyle(fontSize: 8),
-                  ),
-                  pw.Text(
-                    formatter.format(credit.totalAmount),
-                    style: pw.TextStyle(
-                      fontSize: 8,
-                      fontWeight: pw.FontWeight.bold,
+              for (final (label, value, bold) in _creditRows(figures)) _receiptRow(label, value, bold: bold),
+              pw.SizedBox(height: 3),
+              // Lo que el cliente debe después de este pago, destacado
+              pw.Container(
+                padding: const pw.EdgeInsets.symmetric(vertical: 3, horizontal: 4),
+                decoration: pw.BoxDecoration(border: pw.Border.all(width: 0.8)),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      figures.isPaidOff ? 'CRÉDITO PAGADO' : 'SALDO PENDIENTE:',
+                      style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
                     ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 1),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Monto Restante:',
-                    style: const pw.TextStyle(fontSize: 8),
-                  ),
-                  pw.Text(
-                    formatter.format(credit.totalBalance),
-                    style: pw.TextStyle(
-                      fontSize: 8,
-                      fontWeight: pw.FontWeight.bold,
+                    pw.Text(
+                      formatter.format(figures.balance),
+                      style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
                     ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 1),
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Text(
-                    'Valor Cuota:',
-                    style: const pw.TextStyle(fontSize: 8),
-                  ),
-                  pw.Text(
-                    formatter.format(credit.installmentAmount),
-                    style: const pw.TextStyle(fontSize: 8),
-                  ),
-                ],
+                  ],
+                ),
               ),
               if (showOverdueInstallments && isOverdue) ...[
                 pw.SizedBox(height: 2),
@@ -289,6 +305,7 @@ class PrintPreviewDialog extends StatelessWidget {
     final paymentAmount = pendingPaymentAmount ?? 0.0;
     final isOverdue = credit.overdueInstallments > 0;
     final isLargerThanInstallment = paymentAmount > credit.installmentAmount;
+    final figures = _figures;
 
     // El papel del comprobante se mantiene blanco: es la vista previa de un impreso.
     return Container(
@@ -361,54 +378,42 @@ class PrintPreviewDialog extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Monto Prestado:',
-                  style: TextStyle(fontSize: 8, color: Colors.black),
+            for (final (label, value, bold) in _creditRows(figures))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(label, style: const TextStyle(fontSize: 8, color: Colors.black)),
+                    Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 8,
+                        color: Colors.black,
+                        fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  formatter.format(credit.totalAmount),
-                  style: const TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+              ),
+            const SizedBox(height: 4),
+            // Lo que el cliente debe después de este pago, destacado
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+              decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 0.8)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    figures.isPaidOff ? 'CRÉDITO PAGADO' : 'SALDO PENDIENTE:',
+                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Monto Restante:',
-                  style: TextStyle(fontSize: 8, color: Colors.black),
-                ),
-                Text(
-                  formatter.format(credit.totalBalance),
-                  style: const TextStyle(
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                  Text(
+                    formatter.format(figures.balance),
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Valor Cuota:',
-                  style: TextStyle(fontSize: 8, color: Colors.black),
-                ),
-                Text(
-                  formatter.format(credit.installmentAmount),
-                  style: const TextStyle(fontSize: 8, color: Colors.black),
-                ),
-              ],
+                ],
+              ),
             ),
             if (showOverdueInstallments && isOverdue) ...[
               const SizedBox(height: 2),

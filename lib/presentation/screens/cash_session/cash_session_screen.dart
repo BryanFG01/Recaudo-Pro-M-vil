@@ -20,7 +20,7 @@ import '../../providers/credit_provider.dart';
 import '../../widgets/app_bottom_navigation_bar.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import '../../widgets/stat_card.dart';
+import '../../widgets/stat_card.dart';
 import '../../../core/utils/currency_format.dart';
 
 class CashSessionScreen extends ConsumerStatefulWidget {
@@ -380,7 +380,10 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
     final bool totalRecaudoLoading =
         totalRecaudoRealAsync?.isLoading ?? flowAsync.isLoading;
 
-    final bool canWithdraw = flow?.allowedToWithdraw ?? true;
+    final user = ref.read(currentUserProvider);
+    final currentSession = user == null ? null : ref.watch(currentCashSessionProvider(user.id)).valueOrNull;
+    final isClosed = currentSession != null && !currentSession.isOpen;
+    final bool canWithdraw = !isClosed && (flow?.allowedToWithdraw ?? true);
     _checkNewlyApprovedWithdrawals(data.withdrawals);
 
     final totalVentas = _ventasParaMostrar(
@@ -415,14 +418,16 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
               color: AppColors.error.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppTheme.radiusControl),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Icon(Icons.lock_outline, color: AppColors.error),
-                SizedBox(width: 12),
+                const Icon(Icons.lock_outline, color: AppColors.error),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    'No tienes permisos para realizar retiros en este momento.',
-                    style: TextStyle(color: AppColors.error, fontSize: 14),
+                    isClosed
+                        ? 'Tu caja está cerrada. Ábrela en Reportes para registrar retiros.'
+                        : 'No tienes permisos para realizar retiros en este momento.',
+                    style: const TextStyle(color: AppColors.error, fontSize: 14),
                   ),
                 ),
               ],
@@ -481,12 +486,18 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
           ),
         ],
         const SizedBox(height: 28),
-        if (data.withdrawals.any((w) => !w.isApproved)) ...[
+        if (data.withdrawals.any((w) => w.status == WithdrawalStatus.pending)) ...[
           _buildPendingWithdrawalsBanner(data.withdrawals),
         ],
       ],
     );
   }
+
+  static Color _statusColor(WithdrawalStatus status) => switch (status) {
+        WithdrawalStatus.applied => AppColors.success,
+        WithdrawalStatus.pending => AppColors.warning,
+        WithdrawalStatus.rejected => AppColors.error,
+      };
 
   /// Ventas a mostrar: 1) flow.totalCredits si > 0; 2) suma por sesión (cash_session_id); 3) si sigue 0 (p. ej. API no envía cash_session_id) usar total del summary del usuario.
   double _ventasParaMostrar(
@@ -513,7 +524,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
       final user = ref.read(currentUserProvider);
       if (user == null) return;
       final pendingIds =
-          list.where((w) => !w.isApproved).map((w) => w.id).toSet();
+          list.where((w) => w.status == WithdrawalStatus.pending).map((w) => w.id).toSet();
       final previousPending =
           ref.read(previousPendingWithdrawalIdsProvider(user.id));
       final newlyApproved = list
@@ -608,7 +619,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             ),
           const SizedBox(height: 4),
           Text(
-            'Caja inicial + recaudo - retiros - ventas',
+            'Caja inicial + recaudo - ventas - retiros - gastos',
             style: TextStyle(
               color: foreground.withValues(alpha: 0.6),
               fontSize: 13,
@@ -621,7 +632,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
 
   /// Alerta cuando hay retiros pendientes de aprobación.
   Widget _buildPendingWithdrawalsBanner(List<WithdrawalEntity> list) {
-    final pendingCount = list.where((w) => !w.isApproved).length;
+    final pendingCount = list.where((w) => w.status == WithdrawalStatus.pending).length;
     if (pendingCount == 0) return const SizedBox.shrink();
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -671,7 +682,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (list.any((w) => !w.isApproved))
+                  if (list.any((w) => w.status == WithdrawalStatus.pending))
                     _buildPendingWithdrawalsBanner(list),
                 ],
               );
@@ -679,7 +690,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (list.any((w) => !w.isApproved)) ...[
+                if (list.any((w) => w.status == WithdrawalStatus.pending)) ...[
                   _buildPendingWithdrawalsBanner(list),
                   const SizedBox(height: 12),
                 ],
@@ -800,7 +811,7 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (list.any((w) => !w.isApproved)) ...[
+                if (list.any((w) => w.status == WithdrawalStatus.pending)) ...[
                   _buildPendingWithdrawalsBanner(list),
                   const SizedBox(height: 12),
                 ],
@@ -917,17 +928,17 @@ class _CashSessionScreenState extends ConsumerState<CashSessionScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: w.isApproved
-                      ? AppColors.success.withValues(alpha: 0.15)
-                      : AppColors.warning.withValues(alpha: 0.15),
+                  color: _statusColor(w.status).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  w.isApproved
-                      ? AppStrings.approved
-                      : AppStrings.pendingApproval,
+                  switch (w.status) {
+                    WithdrawalStatus.applied => w.isExpense ? 'Gasto' : AppStrings.approved,
+                    WithdrawalStatus.pending => AppStrings.pendingApproval,
+                    WithdrawalStatus.rejected => 'Rechazado',
+                  },
                   style: TextStyle(
-                    color: w.isApproved ? AppColors.success : AppColors.warning,
+                    color: _statusColor(w.status),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),

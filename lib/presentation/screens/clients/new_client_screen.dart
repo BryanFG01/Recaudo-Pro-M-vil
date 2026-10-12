@@ -14,10 +14,14 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/business_helper.dart';
+import '../../../core/utils/currency_format.dart';
 import '../../../domain/entities/business_entity.dart';
 import '../../../domain/entities/client_entity.dart';
 import '../../../domain/entities/credit_entity.dart';
+import '../../../domain/services/client_form_rules.dart';
 import '../../../domain/services/credit_rules.dart';
+// Con prefijo donde una variable local se llama igual que la regla (interestAmount, dailyInstallment)
+import '../../../domain/services/credit_rules.dart' as credit_rules;
 import '../../providers/auth_provider.dart';
 import '../../providers/business_provider.dart';
 import '../../providers/cash_session_provider.dart';
@@ -186,11 +190,13 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
   }
 
   // Días de cobro (sin domingos): regla en domain/services/credit_rules.dart
-  int _calculateWorkingDays(DateTime start, DateTime end) => countCollectionDays(start, end);
+  int _calculateWorkingDays(DateTime start, DateTime end) =>
+      countCollectionDays(start, end);
 
   double _calculateDailyInstallment() {
     // Limpiar formato: quitar comas, puntos y todo lo no numérico (500.000 / 500,000 → 500000)
-    final cleanedAmount = _creditAmountController.text.replaceAll(RegExp(r'[^\d]'), '');
+    final cleanedAmount =
+        _creditAmountController.text.replaceAll(RegExp(r'[^\d]'), '');
     return dailyInstallment(
       amount: double.tryParse(cleanedAmount) ?? 0,
       interestPercent: double.tryParse(_interestController.text.trim()) ?? 0,
@@ -373,7 +379,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       }
 
       final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        locationSettings:
+            const LocationSettings(accuracy: LocationAccuracy.high),
       );
       if (!mounted) return;
 
@@ -406,8 +413,39 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
     }
   }
 
+  /// Muestra qué falta: los errores bajo cada campo quedan arriba, lejos del botón Guardar.
+  bool _validateBeforeSave() {
+    _formKey.currentState!.validate(); // marca en rojo los campos vacíos
+    final error = newClientFormError(
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
+      phone: _phoneController.text,
+      hasCreditAmount: _creditAmountController.text.trim().isNotEmpty,
+      collectionDays: _calculateWorkingDays(_startDate, _endDate),
+    );
+    if (error == null) return true;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: AppColors.error));
+    return false;
+  }
+
   Future<void> _handleSaveClientAndCredit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_validateBeforeSave()) return;
+    // La venta sale de la caja: con la caja cerrada no se crea nada (ni el cliente sin su crédito)
+    final user = ref.read(currentUserProvider);
+    if (user != null && _creditAmountController.text.trim().isNotEmpty) {
+      final cashBlocker = await cashMovementBlocker(ref, user.id);
+      if (cashBlocker != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(cashBlocker), backgroundColor: AppColors.error));
+        }
+        return;
+      }
+    }
+    if (!mounted) return;
 
     // Cerrar teclado para evitar IME/animation y que se vea el SnackBar
     FocusScope.of(context).unfocus();
@@ -429,8 +467,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
       // Si no hay negocio seleccionado (p. ej. tras esperar en la vista), usar el del usuario actual
       BusinessEntity? business = selectedBusiness;
       business ??= await ref
-            .read(businessRepositoryProvider)
-            .getBusinessById(currentUser.businessId);
+          .read(businessRepositoryProvider)
+          .getBusinessById(currentUser.businessId);
       if (business == null) {
         throw Exception(
           'Negocio no disponible. Selecciona un negocio o vuelve a entrar.',
@@ -513,7 +551,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             userId: currentUser.id,
             userNumber: userNumber,
           );
-          debugPrint('Client versioned successfully. New ID: ${finalClient.id}');
+          debugPrint(
+              'Client versioned successfully. New ID: ${finalClient.id}');
         } else {
           finalClient = await clientRepository.updateClient(updatedClient);
           debugPrint('Client updated successfully. ID: ${finalClient.id}');
@@ -557,7 +596,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
         if (creditAmount > 0) {
           final interest =
               double.tryParse(_interestController.text.trim()) ?? 0;
-          final interestAmount = creditAmount * interest / 100;
+          // Pesos enteros: interés redondeado y cuota redondeada hacia arriba (domain/services/credit_rules.dart)
+          final interestAmount = credit_rules.interestAmount(amount: creditAmount, interestPercent: interest);
           final totalWithInterest = creditAmount + interestAmount;
 
           final workingDays = _calculateWorkingDays(_startDate, _endDate);
@@ -567,17 +607,20 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
             );
           }
 
-          final dailyInstallment = totalWithInterest / workingDays;
+          final dailyInstallment = credit_rules.dailyInstallment(
+              amount: creditAmount, interestPercent: interest, collectionDays: workingDays);
 
           // Si hay un cliente existente, intentamos actualizar el crédito (Renovación)
           if (widget.clientId != null && widget.isRenovation) {
-            debugPrint('Renovation mode (isRenovation=true): Looking for existing credit for client ${widget.clientId}');
+            debugPrint(
+                'Renovation mode (isRenovation=true): Looking for existing credit for client ${widget.clientId}');
             // Si no tenemos el crédito en memoria, intentamos buscarlo una última vez
             if (_existingCredit == null) {
               final credits = await ref
                   .read(creditRepositoryProvider)
                   .getCreditsByClientId(businessId, widget.clientId!);
-              debugPrint('Found ${credits.length} credits for client ${widget.clientId}');
+              debugPrint(
+                  'Found ${credits.length} credits for client ${widget.clientId}');
               if (credits.isNotEmpty) {
                 _existingCredit = credits.first;
                 debugPrint('Using existing credit ID: ${_existingCredit!.id}');
@@ -629,7 +672,8 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                   'Puede haber un problema de sincronización. Intenta refrescar la lista de clientes.',
                 );
               }
-              debugPrint('Client verified to exist before creating credit: ${clientExists.id}');
+              debugPrint(
+                  'Client verified to exist before creating credit: ${clientExists.id}');
 
               final credit = CreditEntity(
                 id: _uuid.v4(),
@@ -764,10 +808,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
   @override
   Widget build(BuildContext context) {
     final dateFormatter = DateFormat('dd/MM/yyyy');
-    final currencyFormatter = NumberFormat.currency(
-      symbol: '\$',
-      decimalDigits: 2,
-    );
+    final currencyFormatter = AppCurrency.formatter;
     final dailyInstallment = _calculateDailyInstallment();
     final workingDays = _calculateWorkingDays(_startDate, _endDate);
 
@@ -805,12 +846,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                 hint: AppStrings.enterFirstName,
                 prefixIcon: Icons.person_outline,
                 controller: _firstNameController,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa el nombre';
-                  }
-                  return null;
-                },
+                validator: (value) => requiredField(value, 'nombre'),
               ),
               const SizedBox(height: 16),
               // Last Name
@@ -819,12 +855,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                 hint: AppStrings.enterLastName,
                 prefixIcon: Icons.person_outline,
                 controller: _lastNameController,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa el apellido';
-                  }
-                  return null;
-                },
+                validator: (value) => requiredField(value, 'apellido'),
               ),
               const SizedBox(height: 16),
               // Phone
@@ -834,12 +865,7 @@ class _NewClientScreenState extends ConsumerState<NewClientScreen> {
                 prefixIcon: Icons.phone_outlined,
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Por favor ingresa el teléfono';
-                  }
-                  return null;
-                },
+                validator: (value) => requiredField(value, 'teléfono'),
               ),
               const SizedBox(height: 16),
               // Address

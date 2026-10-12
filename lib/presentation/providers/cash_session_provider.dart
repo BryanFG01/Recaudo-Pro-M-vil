@@ -5,6 +5,8 @@ import '../../data/repositories/cash_session_repository_impl.dart';
 import '../../domain/entities/cash_session_entity.dart';
 import '../../domain/entities/cash_session_flow_entity.dart';
 import '../../domain/entities/daily_summary_by_user_entity.dart';
+import '../../domain/entities/daily_summary_entity.dart';
+import '../../domain/services/cash_rules.dart';
 import '../../domain/entities/withdrawal_entity.dart';
 import '../../domain/entities/withdrawals_data_entity.dart';
 import '../../domain/usecases/cash_session/create_withdrawal_usecase.dart';
@@ -100,6 +102,48 @@ final dailySummaryByUserProvider =
   final repo = ref.watch(cashSessionRepositoryProvider);
   return repo.getDailySummaryByUserId(userId);
 });
+
+/// Caja actual del usuario (la más reciente del resumen) con su estado abierta/cerrada.
+final currentCashSessionProvider = FutureProvider.family<DailySummaryEntity?, String>((ref, userId) async {
+  return currentSessionOf(await ref.watch(dailySummaryByUserProvider(userId).future));
+});
+
+/// Motivo para no registrar cobros o ventas (caja cerrada); null si se puede o si no se sabe
+/// (sin conexión y sin datos guardados: la API valida igual).
+Future<String?> cashMovementBlocker(WidgetRef ref, String userId) async {
+  try {
+    return movementBlocker(await ref.read(currentCashSessionProvider(userId).future), known: true);
+  } catch (_) {
+    return movementBlocker(null, known: false);
+  }
+}
+
+/// Abrir y cerrar caja (requieren conexión). Después recarga todo lo que depende de la caja.
+final cashSessionActionsProvider = Provider<CashSessionActions>((ref) => CashSessionActions(ref));
+
+class CashSessionActions {
+  final Ref _ref;
+  CashSessionActions(this._ref);
+
+  Future<CashSessionEntity> open(String userId) async {
+    final session = await _ref.read(cashSessionRepositoryProvider).openCashSession();
+    _refresh(userId);
+    return session;
+  }
+
+  Future<CashSessionEntity> close(String userId, String sessionId) async {
+    final session = await _ref.read(cashSessionRepositoryProvider).closeCashSession(sessionId);
+    _refresh(userId);
+    return session;
+  }
+
+  void _refresh(String userId) {
+    _ref.invalidate(dailySummaryByUserProvider(userId));
+    _ref.invalidate(cashSessionByUserProvider(userId));
+    _ref.invalidate(cashSessionFlowProvider);
+    _ref.invalidate(withdrawalsByUserProvider(userId));
+  }
+}
 
 /// Todas las sesiones de caja del usuario (GET /api/cash-sessions/user/{userId}).
 /// Devuelve la lista completa para sumar ingresos (initial_balance) de todas.
